@@ -1,0 +1,58 @@
+#define IDD_ABOUTBOX                    100
+#define IDP_OLE_INIT_FAILED             100
+#define IDR_MAINFRAME                   128
+#define IDR_CouplingAssembly1TYPE       130
+#define IDD_ASSEMBLY_PARAMS_DLG         310
+#define IDD_HALFCOUPLING_PARAMS_DLG     312
+#define IDD_SPIDER_PARAMS_DLG           314
+#define IDC_EDIT_ASSEMBLY_TORQUE        1001
+#define IDC_EDIT_ASSEMBLY_EXECUTION     1002
+#define IDC_EDIT_ASSEMBLY_SHAFT1        1003
+#define IDC_EDIT_ASSEMBLY_SHAFT2        1004
+#define IDC_EDIT_HALF_BORE              1011
+#define IDC_EDIT_HALF_OUTER             1012
+#define IDC_EDIT_HALF_LENGTH            1013
+#define IDC_EDIT_HALF_L1                1014
+#define IDC_EDIT_HALF_LHUB              1015
+#define IDC_EDIT_HALF_D1                1016
+#define IDC_EDIT_HALF_KEY_B             1017
+#define IDC_EDIT_HALF_DT1               1018
+#define IDC_EDIT_HALF_L2                1019
+#define IDC_EDIT_HALF_L3                1020
+#define IDC_EDIT_HALF_FACE_B            1024
+#define IDC_EDIT_HALF_FACE_B1           1025
+#define IDC_EDIT_HALF_R                 1026
+#define IDC_EDIT_HALF_LUGS              1027
+#define IDC_EDIT_HALF_TABLEID           1028
+#define IDC_BTN_HALF_FROM_GOST          1029
+#define IDC_EDIT_SPIDER_OUTER           1021
+#define IDC_EDIT_SPIDER_THICKNESS       1022
+#define IDC_EDIT_SPIDER_RAYS            1023
+#define IDC_EDIT_SPIDER_INNER           1040
+#define IDC_EDIT_SPIDER_LEG             1041
+#define IDC_EDIT_SPIDER_FILLET          1042
+#define IDC_EDIT_SPIDER_MASS            1043
+#define IDC_BTN_SPIDER_FROM_GOST        1044
+#define IDC_BTN_ASM_FROM_GOST           1045
+#define IDC_EDIT_ASM_DER_L              1046
+#define IDC_EDIT_ASM_DER_D1             1047
+#define IDC_EDIT_ASM_DER_NMAX           1048
+#define IDC_EDIT_ASM_DER_MASS           1049
+#define IDC_EDIT_ASM_DER_B1             1050
+#define ID_CONNECT_KOMPAS               40002
+#define ID_PARAMS_CURRENT               32801
+#define ID_PARAMS_ASSEMBLY              32802
+#define ID_PARAMS_HALF1                 32803
+#define ID_PARAMS_HALF2                 32804
+#define ID_PARAMS_SPIDER                32805
+#define ID_REAPPLY_GOST_ALL             32806
+#define ID_BUILD_COUPLING               40001
+
+#ifdef APSTUDIO_INVOKED
+#ifndef APSTUDIO_READONLY_SYMBOLS
+#define _APS_NEXT_RESOURCE_VALUE        316
+#define _APS_NEXT_COMMAND_VALUE         40003
+#define _APS_NEXT_CONTROL_VALUE         1051
+#define _APS_NEXT_SYMED_VALUE           310
+#endif
+#endif
