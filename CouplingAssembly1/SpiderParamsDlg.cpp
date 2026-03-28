@@ -65,7 +65,7 @@ END_MESSAGE_MAP()
 BOOL CSpiderParamsDlg::OnInitDialog()
 {
 	CDialogEx::OnInitDialog();
-	SetWindowTextW(L"\u041f\u0430\u0440\u0430\u043c\u0435\u0442\u0440\u044b \u0437\u0432\u0435\u0437\u0434\u043e\u0447\u043a\u0438");
+	SetWindowTextW(L"Параметры звёздочки");
 	return TRUE;
 }
 
@@ -76,7 +76,7 @@ void CSpiderParamsDlg::OnOK()
 	if (m_outerDiameter <= m_innerDiameter + 0.5)
 	{
 		AfxMessageBox(
-			L"D \u0434\u043e\u043b\u0436\u0435\u043d \u0431\u044b\u0442\u044c \u0431\u043e\u043b\u044c\u0448\u0435 \u0432\u043d\u0443\u0442\u0440\u0435\u043d\u043d\u0435\u0433\u043e d.",
+			L"Наружный диаметр D должен быть больше внутреннего d.",
 			MB_OK | MB_ICONWARNING);
 		return;
 	}

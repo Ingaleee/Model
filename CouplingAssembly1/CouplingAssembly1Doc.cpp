@@ -121,8 +121,7 @@ void CCouplingAssembly1Doc::Serialize(CArchive& ar)
 		if (sig != kArchiveSig)
 		{
 			AfxMessageBox(
-				L"\u0424\u0430\u0439\u043b \u043d\u0435 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f "
-				L"\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u043e\u043c CouplingAssembly1.",
+				L"Файл не является документом CouplingAssembly1.",
 				MB_OK | MB_ICONWARNING);
 			AfxThrowArchiveException(CArchiveException::badIndex);
 		}
@@ -130,10 +129,7 @@ void CCouplingAssembly1Doc::Serialize(CArchive& ar)
 		ar >> ver;
 		if (ver != kArchiveVer)
 		{
-			AfxMessageBox(
-				L"\u0412\u0435\u0440\u0441\u0438\u044f \u0444\u0430\u0439\u043b\u0430 \u043d\u0435 "
-				L"\u043f\u043e\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u0442\u0441\u044f.",
-				MB_OK | MB_ICONWARNING);
+			AfxMessageBox(L"Версия файла не поддерживается.", MB_OK | MB_ICONWARNING);
 			AfxThrowArchiveException(CArchiveException::badSchema);
 		}
 		int node = 0;

@@ -30,9 +30,11 @@ bool TryConnectKompas3D(CString* pErrorMessage)
 		return true;
 
 	CLSID clsid{};
-	HRESULT hr = CLSIDFromProgID(L"KOMPAS.Application.5", &clsid);
+	HRESULT hr = CLSIDFromProgID(L"Kompas.Application.5", &clsid);
 	if (FAILED(hr))
-		return fail(L"Не найден CLSID Компаса");
+		hr = CLSIDFromProgID(L"KOMPAS.Application.5", &clsid);
+	if (FAILED(hr))
+		return fail(L"КОМПАС-3D не найден в системе (переустановите программу или зарегистрируйте COM).");
 
 	IUnknown* pUnkRaw = nullptr;
 	hr = GetActiveObject(clsid, nullptr, &pUnkRaw);
@@ -48,7 +50,7 @@ bool TryConnectKompas3D(CString* pErrorMessage)
 	KompasObject* pKompasRaw = nullptr;
 	hr = pUnk->QueryInterface(__uuidof(KompasObject), reinterpret_cast<void**>(&pKompasRaw));
 	if (FAILED(hr))
-		return fail(L"Не удалось получить интерфейс KompasObject");
+		return fail(L"Не удалось получить интерфейс приложения КОМПАС-3D.");
 
 	g_pKompasApp5.Attach(pKompasRaw);
 	g_pKompasApp5->Visible = VARIANT_TRUE;
@@ -71,10 +73,10 @@ bool IsKompasConnected()
 bool TryConnectKompas3D(CString* pErrorMessage)
 {
 	const wchar_t* msg =
-		L"Интеграция с КОМПАС-3D отключена в сборке (COUPLING_USE_KOMPAS_SDK=0).\n"
-		L"Чтобы включить: установите КОМПАС с SDK, укажите KompasSdkRoot в CouplingAssembly1.vcxproj "
-		L"или переменную среды KOMPASSDKROOT (папка …\\SDK), затем в проекте задайте COUPLING_USE_KOMPAS_SDK=1 "
-		L"и добавьте в каталоги включения …\\SDK\\Include и …\\Bin (для kAPI5.tlb).";
+		L"Интеграция с КОМПАС-3D отключена в этой сборке (COUPLING_USE_KOMPAS_SDK=0).\n"
+		L"Чтобы включить: установите КОМПАС с SDK, в файле проекта (.vcxproj) задайте папку SDK "
+		L"или переменную среды KOMPASSDKROOT (каталог SDK с подпапкой Include), "
+		L"включите COUPLING_USE_KOMPAS_SDK=1 и добавьте в каталоги включения …\\Include и …\\Bin (для kAPI5.tlb).";
 
 	if (pErrorMessage != nullptr)
 		*pErrorMessage = msg;

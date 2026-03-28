@@ -51,23 +51,16 @@ void CAsmTreeView::OnInitialUpdate()
 	CTreeCtrl& tree = GetTreeCtrl();
 	tree.DeleteAllItems();
 
-	HTREEITEM hRoot = tree.InsertItem(
-		L"\u0421\u0431\u043e\u0440\u043a\u0430");
+	HTREEITEM hRoot = tree.InsertItem(L"Сборка");
 	tree.SetItemData(hRoot, NodeAssembly);
 
-	HTREEITEM hHalf1 = tree.InsertItem(
-		L"\u041f\u043e\u043b\u0443\u043c\u0443\u0444\u0442\u0430 1",
-		hRoot);
+	HTREEITEM hHalf1 = tree.InsertItem(L"Полумуфта 1", hRoot);
 	tree.SetItemData(hHalf1, NodeHalfCoupling1);
 
-	HTREEITEM hHalf2 = tree.InsertItem(
-		L"\u041f\u043e\u043b\u0443\u043c\u0443\u0444\u0442\u0430 2",
-		hRoot);
+	HTREEITEM hHalf2 = tree.InsertItem(L"Полумуфта 2", hRoot);
 	tree.SetItemData(hHalf2, NodeHalfCoupling2);
 
-	HTREEITEM hSpider = tree.InsertItem(
-		L"\u0417\u0432\u0451\u0437\u0434\u043e\u0447\u043a\u0430",
-		hRoot);
+	HTREEITEM hSpider = tree.InsertItem(L"Звёздочка", hRoot);
 	tree.SetItemData(hSpider, NodeSpider);
 
 	tree.Expand(hRoot, TVE_EXPAND);
@@ -185,15 +178,9 @@ void CAsmTreeView::OnNMRclick(NMHDR* pNMHDR, LRESULT* pResult)
 
 	CMenu menu;
 	menu.CreatePopupMenu();
-	menu.AppendMenu(
-		MF_STRING,
-		ID_PARAMS_CURRENT,
-		L"\u041f\u0430\u0440\u0430\u043c\u0435\u0442\u0440\u044b...");
+	menu.AppendMenu(MF_STRING, ID_PARAMS_CURRENT, L"Параметры…");
 	menu.AppendMenu(MF_SEPARATOR);
-	menu.AppendMenu(
-		MF_STRING,
-		ID_BUILD_COUPLING,
-		L"\u041f\u043e\u0441\u0442\u0440\u043e\u0438\u0442\u044c");
+	menu.AppendMenu(MF_STRING, ID_BUILD_COUPLING, L"Построить");
 
 	menu.TrackPopupMenu(
 		TPM_LEFTALIGN | TPM_RIGHTBUTTON,

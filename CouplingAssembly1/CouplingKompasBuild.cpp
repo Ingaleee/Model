@@ -18,6 +18,13 @@ namespace
 {
 constexpr double kPi = 3.14159265358979323846;
 
+inline void KsAxisLineXThroughOriginStyle3(ksDocument2DPtr p2DDoc)
+{
+	if (p2DDoc == nullptr)
+		return;
+	p2DDoc->ksLineSeg(-10.0, 0.0, 10.0, 0.0, 3);
+}
+
 double SetscrewHoleRadiusMm(double seriesTorqueNm)
 {
 	if (seriesTorqueNm <= 31.5 + 1e-9)
@@ -71,7 +78,7 @@ CStringW BuildOutputFolder()
 	wchar_t temp[MAX_PATH]{};
 	GetTempPathW(static_cast<DWORD>(std::size(temp)), temp);
 	CStringW dir(temp);
-	dir += L"CouplingAssembly1_kompas\\";
+	dir += L"Муфта_КОМПАС\\";
 	::CreateDirectoryW(dir, nullptr);
 	return dir;
 }
@@ -96,9 +103,10 @@ bool AddAnnulusBoss(
 	pSketchDef->SetPlane(planeForSketch);
 	pSketch->Create();
 
-	ksDocument2DPtr p2d = pSketchDef->BeginEdit();
-	p2d->ksCircle(0.0, 0.0, outerR, 1);
-	p2d->ksCircle(0.0, 0.0, innerR, 1);
+	ksDocument2DPtr p2DDoc = pSketchDef->BeginEdit();
+	p2DDoc->ksCircle(0.0, 0.0, outerR, 1);
+	p2DDoc->ksCircle(0.0, 0.0, innerR, 1);
+	KsAxisLineXThroughOriginStyle3(p2DDoc);
 	pSketchDef->EndEdit();
 
 	ksEntityPtr pBoss = pPart->NewEntity(o3d_bossExtrusion);
@@ -123,18 +131,29 @@ void TryMeridianRevolveCutTriangle(
 		return;
 	try
 	{
-		ksEntityPtr pSk = pPart->NewEntity(o3d_sketch);
-		ksSketchDefinitionPtr pDef = pSk->GetDefinition();
-		pDef->SetPlane(pPart->GetDefaultEntity(o3d_planeXOZ));
-		pSk->Create();
-		ksDocument2DPtr p2d = pDef->BeginEdit();
-		p2d->ksLineSeg(xa, za, xb, zb, 1);
-		p2d->ksLineSeg(xb, zb, xc, zc, 1);
-		p2d->ksLineSeg(xc, zc, xa, za, 1);
-		pDef->EndEdit();
+		ksEntityPtr pSketch = pPart->NewEntity(o3d_sketch);
+		ksSketchDefinitionPtr pSketchDef = pSketch->GetDefinition();
+		pSketchDef->SetPlane(pPart->GetDefaultEntity(o3d_planeXOZ));
+		pSketch->Create();
+
+		double point_1[3][2]{};
+		point_1[0][0] = xa;
+		point_1[0][1] = za;
+		point_1[1][0] = xb;
+		point_1[1][1] = zb;
+		point_1[2][0] = xc;
+		point_1[2][1] = zc;
+
+		ksDocument2DPtr p2DDoc = pSketchDef->BeginEdit();
+		p2DDoc->ksLineSeg(point_1[0][0], point_1[0][1], point_1[1][0], point_1[1][1], 1);
+		p2DDoc->ksLineSeg(point_1[1][0], point_1[1][1], point_1[2][0], point_1[2][1], 1);
+		p2DDoc->ksLineSeg(point_1[2][0], point_1[2][1], point_1[0][0], point_1[0][1], 1);
+		KsAxisLineXThroughOriginStyle3(p2DDoc);
+		pSketchDef->EndEdit();
+
 		ksEntityPtr pCut = pPart->NewEntity(o3d_cutRotated);
 		ksCutRotatedDefinitionPtr pCutDef = pCut->GetDefinition();
-		pCutDef->SetSketch(pSk);
+		pCutDef->SetSketch(pSketch);
 		pCutDef->SetSideParam(VARIANT_TRUE, 360.0);
 		pCut->Create();
 	}
@@ -180,7 +199,7 @@ void AddHalfCouplingHubEndAndJawFaceChamferCuts(
 		TryMeridianRevolveCutTriangle(pPart, R, 0.0, R - cJaw, 0.0, R, cJaw);
 }
 
-void DrawSpiderProfile(ksDocument2DPtr p2d, int n, double Ro, double Ri, double filletR, double legWidthB)
+void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, double filletR, double legWidthB)
 {
 	const double riDraw =
 		(filletR > 0.02) ? (std::max)(Ro * 0.22, Ri - (std::min)(filletR * 1.55, Ri * 0.28)) : Ri;
@@ -207,9 +226,18 @@ void DrawSpiderProfile(ksDocument2DPtr p2d, int n, double Ro, double Ri, double 
 		const double xI = riDraw * std::cos(inDeg * toRad);
 		const double yI = riDraw * std::sin(inDeg * toRad);
 
-		p2d->ksLineSeg(xP, yP, xS, yS, 1);
-		p2d->ksArcByAngle(0.0, 0.0, Ro, a1, a2, 1, 1);
-		p2d->ksLineSeg(xE, yE, xI, yI, 1);
+		double point_1[2][2]{};
+		point_1[0][0] = xP;
+		point_1[0][1] = yP;
+		point_1[1][0] = xS;
+		point_1[1][1] = yS;
+		p2DDoc->ksLineSeg(point_1[0][0], point_1[0][1], point_1[1][0], point_1[1][1], 1);
+		p2DDoc->ksArcByAngle(0.0, 0.0, Ro, a1, a2, 1, 1);
+		point_1[0][0] = xE;
+		point_1[0][1] = yE;
+		point_1[1][0] = xI;
+		point_1[1][1] = yI;
+		p2DDoc->ksLineSeg(point_1[0][0], point_1[0][1], point_1[1][0], point_1[1][1], 1);
 	}
 }
 
@@ -251,7 +279,7 @@ bool BuildSpiderPart(
 
 		try
 		{
-			pDoc->Putcomment(_bstr_t(L"\u0413\u041e\u0421\u0422 14084-76 \u2014 \u0437\u0432\u0451\u0437\u0434\u043e\u0447\u043a\u0430 (\u044d\u043b\u0430\u0441\u0442\u0438\u0447\u043d\u0430\u044f)"));
+			pDoc->Putcomment(_bstr_t(L"ГОСТ 14084-76 — звёздочка (эластичная)"));
 		}
 		catch (const _com_error&)
 		{
@@ -264,8 +292,9 @@ bool BuildSpiderPart(
 		pSketchDef->SetPlane(pPart->GetDefaultEntity(o3d_planeXOY));
 		pSketch->Create();
 
-		ksDocument2DPtr p2d = pSketchDef->BeginEdit();
-		DrawSpiderProfile(p2d, n, Ro, Ri, rf, s.legWidth);
+		ksDocument2DPtr p2DDoc = pSketchDef->BeginEdit();
+		DrawSpiderProfile(p2DDoc, n, Ro, Ri, rf, s.legWidth);
+		KsAxisLineXThroughOriginStyle3(p2DDoc);
 		pSketchDef->EndEdit();
 
 		ksEntityPtr pBoss = pPart->NewEntity(o3d_bossExtrusion);
@@ -318,25 +347,36 @@ void AddKeywayOnHub(
 	pSkKeyDef->SetPlane(pPlKey);
 	pSkKey->Create();
 
-	ksDocument2DPtr p2dK = pSkKeyDef->BeginEdit();
+	ksDocument2DPtr p2DDoc = pSkKeyDef->BeginEdit();
 	double rkCap = (std::min)(keyHalfWidth * 0.42, cutDepth * 0.38);
 	rkCap = (std::min)(rkCap, (z1 - z0) * 0.2);
 	const double rk = (std::min)((std::max)(0.0, bottomCornerRadius), rkCap);
 	if (rk < 0.12)
 	{
-		p2dK->ksLineSeg(-keyHalfWidth, z0, keyHalfWidth, z0, 1);
-		p2dK->ksLineSeg(keyHalfWidth, z0, keyHalfWidth, z1, 1);
-		p2dK->ksLineSeg(keyHalfWidth, z1, -keyHalfWidth, z1, 1);
-		p2dK->ksLineSeg(-keyHalfWidth, z1, -keyHalfWidth, z0, 1);
+		double point_1[4][2]{};
+		point_1[0][0] = -keyHalfWidth;
+		point_1[0][1] = z0;
+		point_1[1][0] = keyHalfWidth;
+		point_1[1][1] = z0;
+		point_1[2][0] = keyHalfWidth;
+		point_1[2][1] = z1;
+		point_1[3][0] = -keyHalfWidth;
+		point_1[3][1] = z1;
+		p2DDoc->ksLineSeg(point_1[0][0], point_1[0][1], point_1[1][0], point_1[1][1], 1);
+		p2DDoc->ksLineSeg(point_1[1][0], point_1[1][1], point_1[2][0], point_1[2][1], 1);
+		p2DDoc->ksLineSeg(point_1[2][0], point_1[2][1], point_1[3][0], point_1[3][1], 1);
+		p2DDoc->ksLineSeg(point_1[3][0], point_1[3][1], point_1[0][0], point_1[0][1], 1);
+		KsAxisLineXThroughOriginStyle3(p2DDoc);
 	}
 	else
 	{
-		p2dK->ksLineSeg(-keyHalfWidth, z1, -keyHalfWidth, z0 + rk, 1);
-		p2dK->ksArcByAngle(-keyHalfWidth + rk, z0 + rk, rk, 180.0, 270.0, -1, 1);
-		p2dK->ksLineSeg(-keyHalfWidth + rk, z0, keyHalfWidth - rk, z0, 1);
-		p2dK->ksArcByAngle(keyHalfWidth - rk, z0 + rk, rk, 270.0, 360.0, -1, 1);
-		p2dK->ksLineSeg(keyHalfWidth, z0 + rk, keyHalfWidth, z1, 1);
-		p2dK->ksLineSeg(keyHalfWidth, z1, -keyHalfWidth, z1, 1);
+		p2DDoc->ksLineSeg(-keyHalfWidth, z1, -keyHalfWidth, z0 + rk, 1);
+		p2DDoc->ksArcByAngle(-keyHalfWidth + rk, z0 + rk, rk, 180.0, 270.0, -1, 1);
+		p2DDoc->ksLineSeg(-keyHalfWidth + rk, z0, keyHalfWidth - rk, z0, 1);
+		p2DDoc->ksArcByAngle(keyHalfWidth - rk, z0 + rk, rk, 270.0, 360.0, -1, 1);
+		p2DDoc->ksLineSeg(keyHalfWidth, z0 + rk, keyHalfWidth, z1, 1);
+		p2DDoc->ksLineSeg(keyHalfWidth, z1, -keyHalfWidth, z1, 1);
+		KsAxisLineXThroughOriginStyle3(p2DDoc);
 	}
 	pSkKeyDef->EndEdit();
 
@@ -393,19 +433,21 @@ void AddRadialLugs(
 	pSkToothDef->SetPlane(pPart->GetDefaultEntity(o3d_planeXOY));
 	pSkTooth->Create();
 
-	ksDocument2DPtr p2dT = pSkToothDef->BeginEdit();
-	const double x0 = rIn * std::cos(a0);
-	const double y0 = rIn * std::sin(a0);
-	const double x1o = rOut * std::cos(b0);
-	const double y1o = rOut * std::sin(b0);
-	const double x2o = rOut * std::cos(b1);
-	const double y2o = rOut * std::sin(b1);
-	const double x3 = rIn * std::cos(a1);
-	const double y3 = rIn * std::sin(a1);
-	p2dT->ksLineSeg(x0, y0, x1o, y1o, 1);
-	p2dT->ksLineSeg(x1o, y1o, x2o, y2o, 1);
-	p2dT->ksLineSeg(x2o, y2o, x3, y3, 1);
-	p2dT->ksLineSeg(x3, y3, x0, y0, 1);
+	ksDocument2DPtr p2DDoc = pSkToothDef->BeginEdit();
+	double point_1[4][2]{};
+	point_1[0][0] = rIn * std::cos(a0);
+	point_1[0][1] = rIn * std::sin(a0);
+	point_1[1][0] = rOut * std::cos(b0);
+	point_1[1][1] = rOut * std::sin(b0);
+	point_1[2][0] = rOut * std::cos(b1);
+	point_1[2][1] = rOut * std::sin(b1);
+	point_1[3][0] = rIn * std::cos(a1);
+	point_1[3][1] = rIn * std::sin(a1);
+	p2DDoc->ksLineSeg(point_1[0][0], point_1[0][1], point_1[1][0], point_1[1][1], 1);
+	p2DDoc->ksLineSeg(point_1[1][0], point_1[1][1], point_1[2][0], point_1[2][1], 1);
+	p2DDoc->ksLineSeg(point_1[2][0], point_1[2][1], point_1[3][0], point_1[3][1], 1);
+	p2DDoc->ksLineSeg(point_1[3][0], point_1[3][1], point_1[0][0], point_1[0][1], 1);
+	KsAxisLineXThroughOriginStyle3(p2DDoc);
 	pSkToothDef->EndEdit();
 
 	ksEntityPtr pToothBoss = pPart->NewEntity(o3d_bossExtrusion);
@@ -451,19 +493,21 @@ void AddFaceSlotsSmallExec(
 		ksSketchDefinitionPtr pDef = pSk->GetDefinition();
 		pDef->SetPlane(pPart->GetDefaultEntity(o3d_planeXOY));
 		pSk->Create();
-		ksDocument2DPtr p2d = pDef->BeginEdit();
-		const double x0 = r0 * std::cos(a0);
-		const double y0 = r0 * std::sin(a0);
-		const double x1 = r1 * std::cos(a0);
-		const double y1 = r1 * std::sin(a0);
-		const double x2 = r1 * std::cos(a1);
-		const double y2 = r1 * std::sin(a1);
-		const double x3 = r0 * std::cos(a1);
-		const double y3 = r0 * std::sin(a1);
-		p2d->ksLineSeg(x0, y0, x1, y1, 1);
-		p2d->ksLineSeg(x1, y1, x2, y2, 1);
-		p2d->ksLineSeg(x2, y2, x3, y3, 1);
-		p2d->ksLineSeg(x3, y3, x0, y0, 1);
+		ksDocument2DPtr p2DDoc = pDef->BeginEdit();
+		double point_1[4][2]{};
+		point_1[0][0] = r0 * std::cos(a0);
+		point_1[0][1] = r0 * std::sin(a0);
+		point_1[1][0] = r1 * std::cos(a0);
+		point_1[1][1] = r1 * std::sin(a0);
+		point_1[2][0] = r1 * std::cos(a1);
+		point_1[2][1] = r1 * std::sin(a1);
+		point_1[3][0] = r0 * std::cos(a1);
+		point_1[3][1] = r0 * std::sin(a1);
+		p2DDoc->ksLineSeg(point_1[0][0], point_1[0][1], point_1[1][0], point_1[1][1], 1);
+		p2DDoc->ksLineSeg(point_1[1][0], point_1[1][1], point_1[2][0], point_1[2][1], 1);
+		p2DDoc->ksLineSeg(point_1[2][0], point_1[2][1], point_1[3][0], point_1[3][1], 1);
+		p2DDoc->ksLineSeg(point_1[3][0], point_1[3][1], point_1[0][0], point_1[0][1], 1);
+		KsAxisLineXThroughOriginStyle3(p2DDoc);
 		pDef->EndEdit();
 
 		ksEntityPtr pCut = pPart->NewEntity(o3d_cutExtrusion);
@@ -495,21 +539,23 @@ void AddFaceSlotsLargeExec(
 	ksSketchDefinitionPtr pDef = pSk->GetDefinition();
 	pDef->SetPlane(pPart->GetDefaultEntity(o3d_planeXOY));
 	pSk->Create();
-	ksDocument2DPtr p2d = pDef->BeginEdit();
+	ksDocument2DPtr p2DDoc = pDef->BeginEdit();
 	const double a0 = -span * 0.5;
 	const double a1 = span * 0.5;
-	const double x0 = r0 * std::cos(a0);
-	const double y0 = r0 * std::sin(a0);
-	const double x1 = r1 * std::cos(a0);
-	const double y1 = r1 * std::sin(a0);
-	const double x2 = r1 * std::cos(a1);
-	const double y2 = r1 * std::sin(a1);
-	const double x3 = r0 * std::cos(a1);
-	const double y3 = r0 * std::sin(a1);
-	p2d->ksLineSeg(x0, y0, x1, y1, 1);
-	p2d->ksLineSeg(x1, y1, x2, y2, 1);
-	p2d->ksLineSeg(x2, y2, x3, y3, 1);
-	p2d->ksLineSeg(x3, y3, x0, y0, 1);
+	double point_1[4][2]{};
+	point_1[0][0] = r0 * std::cos(a0);
+	point_1[0][1] = r0 * std::sin(a0);
+	point_1[1][0] = r1 * std::cos(a0);
+	point_1[1][1] = r1 * std::sin(a0);
+	point_1[2][0] = r1 * std::cos(a1);
+	point_1[2][1] = r1 * std::sin(a1);
+	point_1[3][0] = r0 * std::cos(a1);
+	point_1[3][1] = r0 * std::sin(a1);
+	p2DDoc->ksLineSeg(point_1[0][0], point_1[0][1], point_1[1][0], point_1[1][1], 1);
+	p2DDoc->ksLineSeg(point_1[1][0], point_1[1][1], point_1[2][0], point_1[2][1], 1);
+	p2DDoc->ksLineSeg(point_1[2][0], point_1[2][1], point_1[3][0], point_1[3][1], 1);
+	p2DDoc->ksLineSeg(point_1[3][0], point_1[3][1], point_1[0][0], point_1[0][1], 1);
+	KsAxisLineXThroughOriginStyle3(p2DDoc);
 	pDef->EndEdit();
 
 	ksEntityPtr pCut = pPart->NewEntity(o3d_cutExtrusion);
@@ -551,8 +597,8 @@ void AddSetScrewHole(
 	ksSketchDefinitionPtr pDef = pSk->GetDefinition();
 	pDef->SetPlane(pPl);
 	pSk->Create();
-	ksDocument2DPtr p2d = pDef->BeginEdit();
-	p2d->ksCircle(hubR - 1.0, 0.0, holeR, 1);
+	ksDocument2DPtr p2DDoc = pDef->BeginEdit();
+	p2DDoc->ksCircle(hubR - 1.0, 0.0, holeR, 1);
 	pDef->EndEdit();
 
 	ksEntityPtr pCut = pPart->NewEntity(o3d_cutExtrusion);
@@ -616,7 +662,7 @@ bool BuildHalfCouplingPart(
 		{
 			CStringW cmt;
 			cmt.Format(
-				L"\u0413\u041e\u0421\u0422 14084-76 \u2014 \u043f\u043e\u043b\u0443\u043c\u0443\u0444\u0442\u0430 %d (d=%.0f, D=%.0f \u043c\u043c)",
+				L"ГОСТ 14084-76 — полумуфта %d (d=%.0f, D=%.0f мм)",
 				(halfNumber == 2) ? 2 : 1,
 				d,
 				D);
@@ -718,10 +764,10 @@ bool TryBuildAssemblyDocument(
 {
 	try
 	{
-		const CStringW pathSpider = dir + L"Zvezdochka.m3d";
-		const CStringW pathHalf1 = dir + L"Polymufta1.m3d";
-		const CStringW pathHalf2 = dir + L"Polymufta2.m3d";
-		const CStringW pathAsmOut = dir + L"Mufta_Sborka.a3d";
+		const CStringW pathSpider = dir + L"Звёздочка.m3d";
+		const CStringW pathHalf1 = dir + L"Полумуфта1.m3d";
+		const CStringW pathHalf2 = dir + L"Полумуфта2.m3d";
+		const CStringW pathAsmOut = dir + L"Муфта_Сборка.a3d";
 
 		ksDocument3DPtr pAsmDoc = app->Document3D();
 		VARIANT_BOOL created = pAsmDoc->Create(VARIANT_FALSE, VARIANT_FALSE);
@@ -739,7 +785,7 @@ bool TryBuildAssemblyDocument(
 		try
 		{
 			pAsmDoc->Putcomment(
-				_bstr_t(L"\u041c\u0443\u0444\u0442\u0430 \u0437\u0443\u0431\u0447\u0430\u0442\u043e-\u0437\u0432\u0451\u0437\u0434\u043e\u0447\u043d\u0430\u044f, \u0413\u041e\u0421\u0422 14084-76 \u2014 \u0441\u0431\u043e\u0440\u043a\u0430"));
+				_bstr_t(L"Муфта зубчато-звёздочная, ГОСТ 14084-76 — сборка"));
 		}
 		catch (const _com_error&)
 		{
@@ -758,7 +804,7 @@ bool TryBuildAssemblyDocument(
 
 			ksPartCollectionPtr coll = pAsmDoc->PartCollection(VARIANT_TRUE);
 			if (coll != nullptr && coll->GetCount() < 3 && err != nullptr)
-				*err += L"\n\u0412 \u0441\u0431\u043e\u0440\u043a\u0443 \u0432\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u043e \u043c\u0435\u043d\u044c\u0448\u0435 \u0442\u0440\u0451\u0445 \u0434\u0435\u0442\u0430\u043b\u0435\u0439 \u2014 \u0438\u043c\u0435\u043d\u0430 \u0438 \u0440\u0430\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u043a\u0430 \u043f\u0440\u043e\u043f\u0443\u0449\u0435\u043d\u044b.";
+				*err += L"\nВ сборку вставлено меньше трёх деталей — имена и расстановка пропущены.";
 
 			if (coll != nullptr && coll->GetCount() >= 3)
 			{
@@ -771,18 +817,18 @@ bool TryBuildAssemblyDocument(
 					{
 						if (k == 0)
 						{
-							p->Putname(_bstr_t(L"\u0417\u0432\u0451\u0437\u0434\u043e\u0447\u043a\u0430"));
-							p->Putmarking(_bstr_t(L"\u0413\u041e\u0421\u0422 14084-76"));
+							p->Putname(_bstr_t(L"Звёздочка"));
+							p->Putmarking(_bstr_t(L"ГОСТ 14084-76"));
 						}
 						else if (k == 1)
 						{
-							p->Putname(_bstr_t(L"\u041f\u043e\u043b\u0443\u043c\u0443\u0444\u0442\u0430 1"));
-							p->Putmarking(_bstr_t(L"\u0412\u0430\u043b 1"));
+							p->Putname(_bstr_t(L"Полумуфта 1"));
+							p->Putmarking(_bstr_t(L"Вал 1"));
 						}
 						else
 						{
-							p->Putname(_bstr_t(L"\u041f\u043e\u043b\u0443\u043c\u0443\u0444\u0442\u0430 2"));
-							p->Putmarking(_bstr_t(L"\u0412\u0430\u043b 2"));
+							p->Putname(_bstr_t(L"Полумуфта 2"));
+							p->Putmarking(_bstr_t(L"Вал 2"));
 						}
 					}
 					catch (const _com_error&)
@@ -862,9 +908,9 @@ bool CouplingBuildInKompas(const CCouplingAssembly1Doc& doc, CString* err)
 	}
 
 	const CStringW dir = BuildOutputFolder();
-	const CStringW pSpider = dir + L"Zvezdochka.m3d";
-	const CStringW pHalf1 = dir + L"Polymufta1.m3d";
-	const CStringW pHalf2 = dir + L"Polymufta2.m3d";
+	const CStringW pSpider = dir + L"Звёздочка.m3d";
+	const CStringW pHalf1 = dir + L"Полумуфта1.m3d";
+	const CStringW pHalf2 = dir + L"Полумуфта2.m3d";
 
 	const HalfCouplingParams& h1 = doc.GetHalfCoupling1Params();
 	const HalfCouplingParams& h2 = doc.GetHalfCoupling2Params();
@@ -887,10 +933,10 @@ bool CouplingBuildInKompas(const CCouplingAssembly1Doc& doc, CString* err)
 		const CString prefix = err->IsEmpty() ? CString(L"КОМПАС-3D: построение по ГОСТ 14084-76.") : *err;
 		err->Format(
 			L"%s\r\n\r\n"
-			L"\u0421\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u043e \u0432: %s\r\n"
-			L"\u2014 Zvezdochka.m3d, Polymufta1.m3d, Polymufta2.m3d\r\n"
-			L"\u2014 Mufta_Sborka.a3d (\u0432 \u0434\u0435\u0440\u0435\u0432\u0435: \u0417\u0432\u0451\u0437\u0434\u043e\u0447\u043a\u0430, \u041f\u043e\u043b\u0443\u043c\u0443\u0444\u0442\u0430 1, \u041f\u043e\u043b\u0443\u043c\u0443\u0444\u0442\u0430 2)\r\n"
-			L"\u042d\u043a\u0441\u043f\u043e\u0440\u0442 STEP/IGES: \u0447\u0435\u0440\u0435\u0437 \u00ab\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u043a\u0430\u043a\u00bb \u0432 \u041a\u041e\u041c\u041f\u0410\u0421\u0435 \u043f\u0440\u0438 \u043d\u0435\u043e\u0431\u0445\u043e\u0434\u0438\u043c\u043e\u0441\u0442\u0438.",
+			L"Сохранено в: %s\r\n"
+			L"— Звёздочка.m3d, Полумуфта1.m3d, Полумуфта2.m3d\r\n"
+			L"— Муфта_Сборка.a3d (в дереве: Звёздочка, Полумуфта 1, Полумуфта 2)\r\n"
+			L"Экспорт STEP/IGES: через «Сохранить как» в КОМПАСе при необходимости.",
 			static_cast<LPCWSTR>(prefix),
 			static_cast<LPCWSTR>(dir));
 	}
@@ -907,7 +953,7 @@ bool CouplingBuildInKompas(const CCouplingAssembly1Doc& doc, CString* err)
 	{
 		*err =
 			L"Сборка в КОМПАС-3D отключена: в проекте задано COUPLING_USE_KOMPAS_SDK=0. "
-			L"Включите SDK (см. CouplingAssembly1.vcxproj), укажите путь к SDK и пересоберите.";
+			L"Подключите SDK в настройках проекта, укажите путь к папке SDK и пересоберите решение.";
 	}
 	return false;
 }

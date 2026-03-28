@@ -69,7 +69,7 @@ END_MESSAGE_MAP()
 BOOL CAssemblyParamsDlg::OnInitDialog()
 {
 	CDialogEx::OnInitDialog();
-	SetWindowTextW(L"\u041f\u0430\u0440\u0430\u043c\u0435\u0442\u0440\u044b \u0441\u0431\u043e\u0440\u043a\u0438");
+	SetWindowTextW(L"Параметры сборки");
 	RefreshDerivedFromGost();
 	UpdateData(FALSE);
 	return TRUE;

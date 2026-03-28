@@ -98,7 +98,7 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 		m_menuParameters.AppendMenu(MF_STRING, ID_PARAMS_ASSEMBLY, L"Параметры сборки");
 		m_menuParameters.AppendMenu(MF_STRING, ID_PARAMS_HALF1, L"Параметры полумуфты 1");
 		m_menuParameters.AppendMenu(MF_STRING, ID_PARAMS_HALF2, L"Параметры полумуфты 2");
-		m_menuParameters.AppendMenu(MF_STRING, ID_PARAMS_SPIDER, L"Параметры звездочки");
+		m_menuParameters.AppendMenu(MF_STRING, ID_PARAMS_SPIDER, L"Параметры звёздочки");
 		m_menuParameters.AppendMenu(MF_SEPARATOR, 0, _T(""));
 		m_menuParameters.AppendMenu(MF_STRING, ID_REAPPLY_GOST_ALL, L"Пересчитать всё по ГОСТ");
 

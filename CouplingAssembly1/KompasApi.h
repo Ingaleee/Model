@@ -1,6 +1,9 @@
 #pragma once
 
 #if COUPLING_USE_KOMPAS_SDK
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <ksConstants.h>
 #include <ksConstants3D.h>
 #ifdef min

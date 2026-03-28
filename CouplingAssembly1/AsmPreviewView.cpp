@@ -19,21 +19,78 @@ namespace
 {
 constexpr double kPi = 3.14159265358979323846;
 
-void DrawSpiderStar(CDC* pDC, int cx, int cy, int Ro, int Ri, int nRays)
+void BuildSpiderProfilePolygonPoints(
+	std::vector<POINT>& pts,
+	int cx,
+	int cy,
+	int n,
+	double Ro,
+	double Ri,
+	double filletR,
+	double legWidth,
+	int arcSegmentsPerCap)
 {
-	if (nRays < 3 || Ro <= Ri + 2)
+	pts.clear();
+	if (n < 3 || Ro <= Ri + 1.0 || arcSegmentsPerCap < 2)
 		return;
 
-	std::vector<POINT> pts;
-	pts.resize(static_cast<size_t>(nRays * 2));
-	for (int i = 0; i < nRays * 2; ++i)
+	const double riDraw =
+		(filletR > 0.02) ? (std::max)(Ro * 0.22, Ri - (std::min)(filletR * 1.55, Ri * 0.28)) : Ri;
+	double capHalfDeg = (180.0 / kPi) * std::asin((std::min)(0.995, legWidth / (2.0 * Ro)));
+	capHalfDeg = (std::max)(6.0, (std::min)(capHalfDeg, 180.0 / n - 1.0));
+
+	const double toRad = kPi / 180.0;
+
+	auto add = [&](double x, double y) {
+		pts.push_back(
+			{ cx + static_cast<LONG>(std::lround(x)), cy + static_cast<LONG>(std::lround(y)) });
+	};
+
+	for (int k = 0; k < n; ++k)
 	{
-		const double ang = -kPi / 2 + (kPi * i) / nRays;
-		const int R = (i % 2 == 0) ? Ro : Ri;
-		pts[static_cast<size_t>(i)].x = cx + static_cast<int>(R * std::cos(ang));
-		pts[static_cast<size_t>(i)].y = cy + static_cast<int>(R * std::sin(ang));
+		const double midDeg = -90.0 + k * (360.0 / n);
+		const double a1 = midDeg - capHalfDeg;
+		const double a2 = midDeg + capHalfDeg;
+		const double inDeg = -90.0 + (k + 0.5) * (360.0 / n);
+		const double prevInDeg =
+			(k == 0) ? (-90.0 + (n - 0.5) * (360.0 / n)) : (-90.0 + (k - 0.5) * (360.0 / n));
+
+		const double xP = riDraw * std::cos(prevInDeg * toRad);
+		const double yP = riDraw * std::sin(prevInDeg * toRad);
+		const double xS = Ro * std::cos(a1 * toRad);
+		const double yS = Ro * std::sin(a1 * toRad);
+		const double xE = Ro * std::cos(a2 * toRad);
+		const double yE = Ro * std::sin(a2 * toRad);
+		const double xI = riDraw * std::cos(inDeg * toRad);
+		const double yI = riDraw * std::sin(inDeg * toRad);
+
+		if (k == 0)
+			add(xP, yP);
+		add(xS, yS);
+		for (int i = 1; i < arcSegmentsPerCap; ++i)
+		{
+			const double ang = a1 + (a2 - a1) * (static_cast<double>(i) / arcSegmentsPerCap);
+			add(Ro * std::cos(ang * toRad), Ro * std::sin(ang * toRad));
+		}
+		add(xE, yE);
+		add(xI, yI);
 	}
-	pDC->Polygon(pts.data(), nRays * 2);
+}
+
+void DrawSpiderStar(CDC* pDC, int cx, int cy, int Ro, int Ri, int nRays, double filletR, double legWidthMm, double outerDiameterMm)
+{
+	if (nRays < 3 || Ro <= Ri + 2 || outerDiameterMm <= 1.0)
+		return;
+
+	const double legW = Ro * (legWidthMm / outerDiameterMm);
+	const double filletPx = Ro * (filletR / outerDiameterMm);
+
+	std::vector<POINT> pts;
+	BuildSpiderProfilePolygonPoints(pts, cx, cy, nRays, static_cast<double>(Ro), static_cast<double>(Ri), filletPx, legW, 10);
+	if (pts.size() < 3)
+		return;
+
+	pDC->Polygon(pts.data(), static_cast<int>(pts.size()));
 }
 
 void DrawSpiderPreview(CDC* pDC, const CRect& area, const SpiderParams& s)
@@ -53,7 +110,7 @@ void DrawSpiderPreview(CDC* pDC, const CRect& area, const SpiderParams& s)
 		CBrush br(RGB(220, 225, 245));
 		CPen* op = pDC->SelectObject(&pen);
 		CBrush* ob = pDC->SelectObject(&br);
-		DrawSpiderStar(pDC, cx, cy, Ro, Ri, s.rays);
+		DrawSpiderStar(pDC, cx, cy, Ro, Ri, s.rays, s.filletRadius, s.legWidth, s.outerDiameter);
 		pDC->SelectObject(ob);
 		pDC->SelectObject(op);
 	}
@@ -101,7 +158,16 @@ void DrawAssemblyPreview(CDC* pDC, const CRect& area, const HalfCouplingParams& 
 	const int Ri = (s.outerDiameter > 1.0) ? (std::max)(Ro / 4, static_cast<int>(Ro * (s.innerDiameter / s.outerDiameter))) : Ro / 3;
 	CPen pen2(PS_SOLID, 2, RGB(40, 40, 120));
 	CPen* op2 = pDC->SelectObject(&pen2);
-	DrawSpiderStar(pDC, mid.CenterPoint().x, mid.CenterPoint().y, Ro, Ri, s.rays);
+	DrawSpiderStar(
+		pDC,
+		mid.CenterPoint().x,
+		mid.CenterPoint().y,
+		Ro,
+		Ri,
+		s.rays,
+		s.filletRadius,
+		s.legWidth,
+		s.outerDiameter);
 	pDC->SelectObject(op2);
 }
 
@@ -157,17 +223,17 @@ void CAsmPreviewView::OnDraw(CDC* pDC)
 		const AssemblyParams& params = pDoc->GetAssemblyParams();
 		const double tRow = GostTables::SnapTorqueToSeries(params.torque);
 
-		line1 = L"\u0421\u0431\u043e\u0440\u043a\u0430 (\u0413\u041e\u0421\u0422 14084-76, \u0442\u0430\u0431\u043b. 21.3.1)";
-		line2.Format(L"\u041c\u043e\u043c\u0435\u043d\u0442 (\u0437\u0430\u0434\u0430\u043d\u043d\u044b\u0439): %.2f \u041d\u00b7\u043c", params.torque);
-		line3.Format(L"\u0420\u044f\u0434 \u0434\u043b\u044f \u0442\u0430\u0431\u043b\u0438\u0446\u044b: %.1f \u041d\u00b7\u043c", tRow);
-		line4.Format(L"\u0418\u0441\u043f\u043e\u043b\u043d\u0435\u043d\u0438\u0435: %d  (1 \u2014 4 \u043b\u0443\u0447\u0430; 2 \u2014 6 \u043b\u0443\u0447\u0435\u0439)", params.execution);
-		line5.Format(L"\u0412\u0430\u043b 1 / 2: %.2f / %.2f \u043c\u043c", params.shaftDiameter1, params.shaftDiameter2);
+		line1 = L"Сборка (ГОСТ 14084-76, табл. 21.3.1)";
+		line2.Format(L"Момент (заданный): %.2f Н·м", params.torque);
+		line3.Format(L"Ряд для таблицы: %.1f Н·м", tRow);
+		line4.Format(L"Исполнение: %d  (1 — 4 луча; 2 — 6 лучей)", params.execution);
+		line5.Format(L"Вал 1 / 2: %.2f / %.2f мм", params.shaftDiameter1, params.shaftDiameter2);
 		line6.Format(
-			L"L=%.2f \u043c\u043c, D\u2081=%.2f \u043c\u043c, n_max=%.0f \u043e\u0431/\u043c\u0438\u043d",
+			L"L=%.2f мм, D₁=%.2f мм, n_max=%.0f об/мин",
 			params.assemblyLengthL,
 			params.envelopeD1,
 			params.maxSpeedRpm);
-		line7.Format(L"m=%.3f \u043a\u0433, b\u2081=%.2f \u043c\u043c", params.massKg, params.widthB1);
+		line7.Format(L"m=%.3f кг, b₁=%.2f мм", params.massKg, params.widthB1);
 
 		DrawAssemblyPreview(
 			pDC,
@@ -181,13 +247,13 @@ void CAsmPreviewView::OnDraw(CDC* pDC)
 	case NodeHalfCoupling1:
 	{
 		const HalfCouplingParams& h = pDoc->GetHalfCoupling1Params();
-		line1 = L"\u041f\u043e\u043b\u0443\u043c\u0443\u0444\u0442\u0430 1";
-		line2.Format(L"d (\u043e\u0442\u0432\u0435\u0440\u0441\u0442\u0438\u0435): %.2f \u043c\u043c", h.boreDiameter);
-		line3.Format(L"D (\u043d\u0430\u0440\u0443\u0436\u043d\u044b\u0439): %.2f \u043c\u043c", h.outerDiameter);
-		line4.Format(L"L\u2081=%.2f \u043c\u043c, l=%.2f \u043c\u043c (\u0434\u043b\u0438\u043d\u044b \u043f\u043e \u0442\u0430\u0431\u043b.)", h.lengthTotalL1, h.lengthHubL);
-		line5.Format(L"d\u2081=%.2f \u043c\u043c, b=%.2f, d+t\u2081=%.2f \u043c\u043c", h.hubOuterD1, h.keywayWidthB, h.keywayDt1);
-		line6.Format(L"B=%.2f, B\u2081=%.2f \u043c\u043c, \u0433\u0443\u0431\u043a\u0438: %d", h.faceSlotB, h.faceSlotB1, h.lugCount);
-		line7.Format(L"l\u2082=%.2f, l\u2083=%.2f \u043c\u043c, r=%.2f \u043c\u043c", h.lengthL2, h.lengthL3, h.filletR);
+		line1 = L"Полумуфта 1";
+		line2.Format(L"d (отверстие): %.2f мм", h.boreDiameter);
+		line3.Format(L"D (наружный): %.2f мм", h.outerDiameter);
+		line4.Format(L"L₁=%.2f мм, l=%.2f мм (длины по табл.)", h.lengthTotalL1, h.lengthHubL);
+		line5.Format(L"d₁=%.2f мм, b=%.2f, d+t₁=%.2f мм", h.hubOuterD1, h.keywayWidthB, h.keywayDt1);
+		line6.Format(L"B=%.2f, B₁=%.2f мм, губки: %d", h.faceSlotB, h.faceSlotB1, h.lugCount);
+		line7.Format(L"l₂=%.2f, l₃=%.2f мм, r=%.2f мм", h.lengthL2, h.lengthL3, h.filletR);
 		DrawHalfSide(pDC, drawArea, h);
 		break;
 	}
@@ -195,13 +261,13 @@ void CAsmPreviewView::OnDraw(CDC* pDC)
 	case NodeHalfCoupling2:
 	{
 		const HalfCouplingParams& h = pDoc->GetHalfCoupling2Params();
-		line1 = L"\u041f\u043e\u043b\u0443\u043c\u0443\u0444\u0442\u0430 2";
-		line2.Format(L"d (\u043e\u0442\u0432\u0435\u0440\u0441\u0442\u0438\u0435): %.2f \u043c\u043c", h.boreDiameter);
-		line3.Format(L"D (\u043d\u0430\u0440\u0443\u0436\u043d\u044b\u0439): %.2f \u043c\u043c", h.outerDiameter);
-		line4.Format(L"L\u2081=%.2f \u043c\u043c, l=%.2f \u043c\u043c (\u0434\u043b\u0438\u043d\u044b \u043f\u043e \u0442\u0430\u0431\u043b.)", h.lengthTotalL1, h.lengthHubL);
-		line5.Format(L"d\u2081=%.2f \u043c\u043c, b=%.2f, d+t\u2081=%.2f \u043c\u043c", h.hubOuterD1, h.keywayWidthB, h.keywayDt1);
-		line6.Format(L"B=%.2f, B\u2081=%.2f \u043c\u043c, \u0433\u0443\u0431\u043a\u0438: %d", h.faceSlotB, h.faceSlotB1, h.lugCount);
-		line7.Format(L"l\u2082=%.2f, l\u2083=%.2f \u043c\u043c, r=%.2f \u043c\u043c", h.lengthL2, h.lengthL3, h.filletR);
+		line1 = L"Полумуфта 2";
+		line2.Format(L"d (отверстие): %.2f мм", h.boreDiameter);
+		line3.Format(L"D (наружный): %.2f мм", h.outerDiameter);
+		line4.Format(L"L₁=%.2f мм, l=%.2f мм (длины по табл.)", h.lengthTotalL1, h.lengthHubL);
+		line5.Format(L"d₁=%.2f мм, b=%.2f, d+t₁=%.2f мм", h.hubOuterD1, h.keywayWidthB, h.keywayDt1);
+		line6.Format(L"B=%.2f, B₁=%.2f мм, губки: %d", h.faceSlotB, h.faceSlotB1, h.lugCount);
+		line7.Format(L"l₂=%.2f, l₃=%.2f мм, r=%.2f мм", h.lengthL2, h.lengthL3, h.filletR);
 		DrawHalfSide(pDC, drawArea, h);
 		break;
 	}
@@ -209,19 +275,24 @@ void CAsmPreviewView::OnDraw(CDC* pDC)
 	case NodeSpider:
 	{
 		const SpiderParams& s = pDoc->GetSpiderParams();
-		line1 = L"\u0417\u0432\u0435\u0437\u0434\u043e\u0447\u043a\u0430";
-		line2.Format(L"D (\u043d\u0430\u0440\u0443\u0436\u043d.): %.2f \u043c\u043c", s.outerDiameter);
-		line3.Format(L"d (\u0432\u043d\u0443\u0442\u0440.): %.2f \u043c\u043c", s.innerDiameter);
-		line4.Format(L"H (\u0442\u043e\u043b\u0449\u0438\u043d\u0430): %.2f \u043c\u043c", s.thickness);
-		line5.Format(L"B (\u0448\u0438\u0440\u0438\u043d\u0430 \u043b\u0443\u0447\u0430): %.2f \u043c\u043c", s.legWidth);
-		line6.Format(L"\u0427\u0438\u0441\u043b\u043e \u043b\u0443\u0447\u0435\u0439: %d, r: %.2f \u043c\u043c", s.rays, s.filletRadius);
-		line7.Format(L"m=%.3f \u043a\u0433 (\u043f\u043e \u0442\u0430\u0431\u043b. \u0437\u0432\u0435\u0437\u0434\u044b)", s.massKg);
+		const AssemblyParams& ap = pDoc->GetAssemblyParams();
+		line1 = L"Звёздочка";
+		line2.Format(L"D (наружн.): %.2f мм", s.outerDiameter);
+		line3.Format(L"d (внутр.): %.2f мм", s.innerDiameter);
+		line4.Format(L"H (толщина): %.2f мм", s.thickness);
+		line5.Format(L"B (ширина луча): %.2f мм", s.legWidth);
+		line6.Format(L"Число лучей: %d, r скругл.: %.2f мм", s.rays, s.filletRadius);
+		line7.Format(L"m=%.3f кг (по табл. звезды)", s.massKg);
+		line8.Format(
+			L"По сборке: исп. %d → %s (кнопка «Из ГОСТ» задаёт лучи и размеры).",
+			ap.execution,
+			(ap.execution == 1) ? L"4 луча" : L"6 лучей");
 		DrawSpiderPreview(pDC, drawArea, s);
 		break;
 	}
 
 	default:
-		line1 = L"\u041d\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043d\u044b\u0439 \u044d\u043b\u0435\u043c\u0435\u043d\u0442";
+		line1 = L"Неизвестный элемент";
 		line2 = L"";
 		line3 = L"";
 		line4 = L"";
@@ -257,8 +328,7 @@ void CAsmPreviewView::OnDraw(CDC* pDC)
 	pDC->TextOutW(
 		drawArea.left,
 		drawArea.bottom - 18,
-		L"\u0421\u0445\u0435\u043c\u0430 \u0432 \u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u0438; 3D \u0432 \u041a\u041e\u041c\u041f\u0410\u0421\u0435 "
-		L"\u2014 \u043a\u043e\u043c\u0430\u043d\u0434\u0430 \u00ab\u041f\u043e\u0441\u0442\u0440\u043e\u0438\u0442\u044c\u00bb (\u043d\u0443\u0436\u0435\u043d SDK, COUPLING_USE_KOMPAS_SDK=1).");
+		L"Схема в приложении; 3D в КОМПАСе — команда «Построить» (нужен SDK, COUPLING_USE_KOMPAS_SDK=1).");
 }
 
 #ifdef _DEBUG

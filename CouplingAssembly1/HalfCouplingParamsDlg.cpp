@@ -97,7 +97,7 @@ END_MESSAGE_MAP()
 BOOL CHalfCouplingParamsDlg::OnInitDialog()
 {
 	CDialogEx::OnInitDialog();
-	SetWindowTextW(L"\u041f\u0430\u0440\u0430\u043c\u0435\u0442\u0440\u044b \u043f\u043e\u043b\u0443\u043c\u0443\u0444\u0442\u044b");
+	SetWindowTextW(L"Параметры полумуфты");
 	return TRUE;
 }
 
@@ -108,23 +108,20 @@ void CHalfCouplingParamsDlg::OnOK()
 	if (m_l1 < m_lhub + 1.0)
 	{
 		AfxMessageBox(
-			L"L\u2081 \u0434\u043e\u043b\u0436\u043d\u0430 \u0431\u044b\u0442\u044c \u043d\u0435 \u043c\u0435\u043d\u044c\u0448\u0435 "
-			L"\u0434\u043b\u0438\u043d\u044b \u0441\u0442\u0443\u043f\u0438\u0446\u044b l \u0445\u043e\u0442\u044f \u0431\u044b \u043d\u0430 1 \u043c\u043c.",
+			L"L₁ должна быть не меньше длины ступицы l хотя бы на 1 мм.",
 			MB_OK | MB_ICONWARNING);
 		return;
 	}
 	if (m_outerDiameter <= m_boreDiameter + 0.5)
 	{
 		AfxMessageBox(
-			L"D \u0434\u043e\u043b\u0436\u0435\u043d \u0431\u044b\u0442\u044c \u0431\u043e\u043b\u044c\u0448\u0435 d (\u0437\u0430\u0437\u043e\u0440 \u043f\u043e \u043a\u043e\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u0438).",
+			L"D должен быть больше d (зазор по конструкции).",
 			MB_OK | MB_ICONWARNING);
 		return;
 	}
 	if (m_d1 <= m_boreDiameter + 0.5)
 	{
-		AfxMessageBox(
-			L"d\u2081 \u0434\u043e\u043b\u0436\u0435\u043d \u0431\u044b\u0442\u044c \u0431\u043e\u043b\u044c\u0448\u0435 d.",
-			MB_OK | MB_ICONWARNING);
+		AfxMessageBox(L"d₁ должен быть больше d.", MB_OK | MB_ICONWARNING);
 		return;
 	}
 	CDialogEx::OnOK();
@@ -140,8 +137,7 @@ void CHalfCouplingParamsDlg::OnHalfFromGost()
 	if (!GostTables::LookupHalfFromGost(m_gostAssembly, trial, dShaft))
 	{
 		AfxMessageBox(
-			L"\u041d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u0430 \u0441\u0442\u0440\u043e\u043a\u0430 \u0413\u041e\u0421\u0422 \u0434\u043b\u044f \u0437\u0430\u0434\u0430\u043d\u043d\u044b\u0445 "
-			L"M\u043a\u0440, \u0438\u0441\u043f\u043e\u043b\u043d\u0435\u043d\u0438\u044f \u0438 \u0434\u0438\u0430\u043c\u0435\u0442\u0440\u0430 \u0432\u0430\u043b\u0430.",
+			L"Не найдена строка ГОСТ для заданных Мкр, исполнения и диаметра вала.",
 			MB_OK | MB_ICONWARNING);
 		return;
 	}
