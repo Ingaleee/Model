@@ -46,6 +46,18 @@ static double EdgeMidZ(ksEdgeDefinitionPtr def)
 	return 0.5 * (z1 + z2);
 }
 
+void AppendComError(CString* err, const _com_error& e)
+{
+	if (err == nullptr)
+		return;
+	CString msg = e.ErrorMessage();
+	if (msg.IsEmpty())
+		msg = L"Ошибка COM при обращении к КОМПАС-3D";
+	if (!err->IsEmpty())
+		*err += L"\n";
+	*err += msg;
+}
+
 void AddSpiderValleyPadsAndFillets(
 	ksPartPtr pPart,
 	ksDocument3DPtr pDoc,
@@ -167,18 +179,6 @@ double SetscrewHoleRadiusMm(double seriesTorqueNm)
 	if (seriesTorqueNm <= 125.0 + 1e-9)
 		return 2.55;
 	return 3.15;
-}
-
-void AppendComError(CString* err, const _com_error& e)
-{
-	if (err == nullptr)
-		return;
-	CString msg = e.ErrorMessage();
-	if (msg.IsEmpty())
-		msg = L"Ошибка COM при обращении к КОМПАС-3D";
-	if (!err->IsEmpty())
-		*err += L"\n";
-	*err += msg;
 }
 
 ksPartPtr PartFromCollection(ksPartCollectionPtr coll, int idxZeroBased)
