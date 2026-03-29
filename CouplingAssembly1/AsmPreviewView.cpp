@@ -9,6 +9,7 @@
 #include "GostTables.h"
 
 #include <cmath>
+#include <functional>
 #include <vector>
 
 #ifdef _DEBUG
@@ -18,6 +19,112 @@
 namespace
 {
 constexpr double kPi = 3.14159265358979323846;
+
+static bool SpiderTryOuterCornerFillet(
+	double px,
+	double py,
+	double sx,
+	double sy,
+	double ex,
+	double ey,
+	double r,
+	double* oT1x,
+	double* oT1y,
+	double* oT2x,
+	double* oT2y,
+	double* oMx,
+	double* oMy)
+{
+	if (r < 0.025)
+		return false;
+	const double d1x = sx - px;
+	const double d1y = sy - py;
+	const double d2x = ex - sx;
+	const double d2y = ey - sy;
+	const double l1 = std::hypot(d1x, d1y);
+	const double l2 = std::hypot(d2x, d2y);
+	if (l1 < 1e-4 || l2 < 1e-4)
+		return false;
+	const double u1x = d1x / l1;
+	const double u1y = d1y / l1;
+	const double u2x = d2x / l2;
+	const double u2y = d2y / l2;
+	const double cphi = u1x * u2x + u1y * u2y;
+	const double phi = std::acos((std::max)(-1.0, (std::min)(1.0, cphi)));
+	if (phi < 1e-3 || phi > kPi - 1e-3)
+		return false;
+	double t = r / std::tan(phi * 0.5);
+	t = (std::min)(t, l1 * 0.42);
+	t = (std::min)(t, l2 * 0.42);
+	*oT1x = sx - u1x * t;
+	*oT1y = sy - u1y * t;
+	*oT2x = sx + u2x * t;
+	*oT2y = sy + u2y * t;
+	double bx = -u1x + u2x;
+	double by = -u1y + u2y;
+	const double bl = std::hypot(bx, by);
+	if (bl < 1e-8)
+		return false;
+	bx /= bl;
+	by /= bl;
+	if (bx * sx + by * sy > 0.0)
+	{
+		bx = -bx;
+		by = -by;
+	}
+	const double dist = r / std::sin(phi * 0.5);
+	*oMx = sx + bx * dist;
+	*oMy = sy + by * dist;
+	return true;
+}
+
+static void AppendCircleArcInteriorSamples(
+	const std::function<void(double, double)>& vtx,
+	double ax,
+	double ay,
+	double mx,
+	double my,
+	double bx,
+	double by,
+	int nInterior)
+{
+	if (nInterior < 1)
+		return;
+	const double x1 = ax;
+	const double y1 = ay;
+	const double x2 = mx;
+	const double y2 = my;
+	const double x3 = bx;
+	const double y3 = by;
+	const double d =
+		2.0 * (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2));
+	if (std::fabs(d) < 1e-12)
+		return;
+	const double ux =
+		((x1 * x1 + y1 * y1) * (y2 - y3) + (x2 * x2 + y2 * y2) * (y3 - y1) + (x3 * x3 + y3 * y3) * (y1 - y2)) / d;
+	const double uy =
+		((x1 * x1 + y1 * y1) * (x3 - x2) + (x2 * x2 + y2 * y2) * (x1 - x3) + (x3 * x3 + y3 * y3) * (x2 - x1)) / d;
+	const double R = std::hypot(x1 - ux, y1 - uy);
+	if (R < 1e-8)
+		return;
+	const double tA = std::atan2(y1 - uy, x1 - ux);
+	const double tM = std::atan2(y2 - uy, x2 - ux);
+	const double tB = std::atan2(y3 - uy, x3 - ux);
+	auto normD = [](double a, double b) { return std::atan2(std::sin(b - a), std::cos(b - a)); };
+	double dAB = normD(tA, tB);
+	double dAM = normD(tA, tM);
+	const bool mOnShort =
+		(dAB > 0.0 && dAM > 0.0 && dAM < dAB - 1e-6) || (dAB < 0.0 && dAM < 0.0 && dAM > dAB + 1e-6);
+	if (!mOnShort)
+		dAB = (dAB > 0.0) ? dAB - 2.0 * kPi : dAB + 2.0 * kPi;
+	const double tEnd = tA + dAB;
+	for (int i = 1; i <= nInterior; ++i)
+	{
+		const double u = static_cast<double>(i) / static_cast<double>(nInterior + 1);
+		const double tt = tA + u * (tEnd - tA);
+		vtx(ux + R * std::cos(tt), uy + R * std::sin(tt));
+	}
+}
 
 void BuildSpiderProfilePolygonPoints(
 	std::vector<POINT>& pts,
@@ -38,6 +145,12 @@ void BuildSpiderProfilePolygonPoints(
 		(filletR > 0.02) ? (std::max)(Ro * 0.22, Ri - (std::min)(filletR * 1.55, Ri * 0.28)) : Ri;
 	double capHalfDeg = (180.0 / kPi) * std::asin((std::min)(0.995, legWidth / (2.0 * Ro)));
 	capHalfDeg = (std::max)(6.0, (std::min)(capHalfDeg, 180.0 / n - 1.0));
+	const bool fourRayChord90 = (n == 4);
+	if (fourRayChord90)
+		capHalfDeg = 45.0;
+	const double rCornerMin = (std::min)(0.10, (std::max)(0.025, Ro * 0.0045));
+	const double rCorner = (std::max)(rCornerMin, (std::min)(filletR, Ro * 0.15));
+	const int filletSeg = (std::max)(2, arcSegmentsPerCap / 3);
 
 	const double toRad = kPi / 180.0;
 
@@ -64,16 +177,71 @@ void BuildSpiderProfilePolygonPoints(
 		const double xI = riDraw * std::cos(inDeg * toRad);
 		const double yI = riDraw * std::sin(inDeg * toRad);
 
-		if (k == 0)
-			add(xP, yP);
-		add(xS, yS);
-		for (int i = 1; i < arcSegmentsPerCap; ++i)
+		if (fourRayChord90)
 		{
-			const double ang = a1 + (a2 - a1) * (static_cast<double>(i) / arcSegmentsPerCap);
-			add(Ro * std::cos(ang * toRad), Ro * std::sin(ang * toRad));
+			double t1sx, t1sy, t2sx, t2sy, msx, msy;
+			double t3ex, t3ey, t4ex, t4ey, mex, mey;
+			const bool okS = SpiderTryOuterCornerFillet(
+				xP,
+				yP,
+				xS,
+				yS,
+				xE,
+				yE,
+				rCorner,
+				&t1sx,
+				&t1sy,
+				&t2sx,
+				&t2sy,
+				&msx,
+				&msy);
+			const bool okE = SpiderTryOuterCornerFillet(
+				xS,
+				yS,
+				xE,
+				yE,
+				xI,
+				yI,
+				rCorner,
+				&t3ex,
+				&t3ey,
+				&t4ex,
+				&t4ey,
+				&mex,
+				&mey);
+			if (k == 0)
+				add(xP, yP);
+			if (okS)
+			{
+				add(t1sx, t1sy);
+				AppendCircleArcInteriorSamples(add, t1sx, t1sy, msx, msy, t2sx, t2sy, filletSeg);
+				add(t2sx, t2sy);
+			}
+			else
+				add(xS, yS);
+			if (okE)
+			{
+				add(t3ex, t3ey);
+				AppendCircleArcInteriorSamples(add, t3ex, t3ey, mex, mey, t4ex, t4ey, filletSeg);
+				add(t4ex, t4ey);
+			}
+			else
+				add(xE, yE);
+			add(xI, yI);
 		}
-		add(xE, yE);
-		add(xI, yI);
+		else
+		{
+			if (k == 0)
+				add(xP, yP);
+			add(xS, yS);
+			for (int i = 1; i < arcSegmentsPerCap; ++i)
+			{
+				const double ang = a1 + (a2 - a1) * (static_cast<double>(i) / arcSegmentsPerCap);
+				add(Ro * std::cos(ang * toRad), Ro * std::sin(ang * toRad));
+			}
+			add(xE, yE);
+			add(xI, yI);
+		}
 	}
 }
 
@@ -226,8 +394,12 @@ void CAsmPreviewView::OnDraw(CDC* pDC)
 		line1 = L"Сборка (ГОСТ 14084-76, табл. 21.3.1)";
 		line2.Format(L"Момент (заданный): %.2f Н·м", params.torque);
 		line3.Format(L"Ряд для таблицы: %.1f Н·м", tRow);
-		line4.Format(L"Исполнение: %d  (1 — 4 луча; 2 — 6 лучей)", params.execution);
-		line5.Format(L"Вал 1 / 2: %.2f / %.2f мм", params.shaftDiameter1, params.shaftDiameter2);
+		line4.Format(
+			L"Исполнение ГОСТ: %d — %s. Вариант задания: %d",
+			params.execution,
+			(params.execution == 1) ? L"2 губки на полумуфте, звезда 4 луча" : L"3 губки, звезда 6 лучей",
+			params.courseVariant);
+		line5.Format(L"Валы 1 и 2 (две полумуфты, одно исполнение ГОСТ): %.2f / %.2f мм", params.shaftDiameter1, params.shaftDiameter2);
 		line6.Format(
 			L"L=%.2f мм, D₁=%.2f мм, n_max=%.0f об/мин",
 			params.assemblyLengthL,
@@ -247,7 +419,9 @@ void CAsmPreviewView::OnDraw(CDC* pDC)
 	case NodeHalfCoupling1:
 	{
 		const HalfCouplingParams& h = pDoc->GetHalfCoupling1Params();
-		line1 = L"Полумуфта 1";
+		line1.Format(
+			L"Полумуфта 1 (вал 1, d вала в сборке: %.1f мм)",
+			pDoc->GetAssemblyParams().shaftDiameter1);
 		line2.Format(L"d (отверстие): %.2f мм", h.boreDiameter);
 		line3.Format(L"D (наружный): %.2f мм", h.outerDiameter);
 		line4.Format(L"L₁=%.2f мм, l=%.2f мм (длины по табл.)", h.lengthTotalL1, h.lengthHubL);
@@ -261,7 +435,9 @@ void CAsmPreviewView::OnDraw(CDC* pDC)
 	case NodeHalfCoupling2:
 	{
 		const HalfCouplingParams& h = pDoc->GetHalfCoupling2Params();
-		line1 = L"Полумуфта 2";
+		line1.Format(
+			L"Полумуфта 2 (вал 2, d вала в сборке: %.1f мм)",
+			pDoc->GetAssemblyParams().shaftDiameter2);
 		line2.Format(L"d (отверстие): %.2f мм", h.boreDiameter);
 		line3.Format(L"D (наружный): %.2f мм", h.outerDiameter);
 		line4.Format(L"L₁=%.2f мм, l=%.2f мм (длины по табл.)", h.lengthTotalL1, h.lengthHubL);
@@ -281,7 +457,7 @@ void CAsmPreviewView::OnDraw(CDC* pDC)
 		line3.Format(L"d (внутр.): %.2f мм", s.innerDiameter);
 		line4.Format(L"H (толщина): %.2f мм", s.thickness);
 		line5.Format(L"B (ширина луча): %.2f мм", s.legWidth);
-		line6.Format(L"Число лучей: %d, r скругл.: %.2f мм", s.rays, s.filletRadius);
+		line6.Format(L"Число лучей: %d, r луча и впадин: %.2f мм", s.rays, s.filletRadius);
 		line7.Format(L"m=%.3f кг (по табл. звезды)", s.massKg);
 		line8.Format(
 			L"По сборке: исп. %d → %s (кнопка «Из ГОСТ» задаёт лучи и размеры).",
