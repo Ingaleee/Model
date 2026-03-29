@@ -25,6 +25,141 @@ inline void KsAxisLineXThroughOriginStyle3(ksDocument2DPtr p2DDoc)
 	p2DDoc->ksLineSeg(-10.0, 0.0, 10.0, 0.0, 3);
 }
 
+double SpiderInnerValleyRadiusMm(double Ro, double Ri, double filletR)
+{
+	if (filletR > 0.02)
+		return (std::max)(Ro * 0.22, Ri - (std::min)(filletR * 1.55, Ri * 0.28));
+	return Ri;
+}
+
+static double EdgeMidZ(ksEdgeDefinitionPtr def)
+{
+	if (def == nullptr)
+		return 0.0;
+	ksVertexDefinitionPtr v1 = def->GetVertex(true);
+	ksVertexDefinitionPtr v2 = def->GetVertex(false);
+	if (v1 == nullptr || v2 == nullptr)
+		return 0.0;
+	double x1, y1, z1, x2, y2, z2;
+	v1->GetPoint(&x1, &y1, &z1);
+	v2->GetPoint(&x2, &y2, &z2);
+	return 0.5 * (z1 + z2);
+}
+
+void AddSpiderValleyPadsAndFillets(
+	ksPartPtr pPart,
+	ksDocument3DPtr pDoc,
+	double Ro,
+	double Ri,
+	double filletRmm,
+	double thicknessH,
+	int nValleys,
+	CString* err)
+{
+	if (nValleys < 3)
+		return;
+	const double riDraw = SpiderInnerValleyRadiusMm(Ro, Ri, filletRmm);
+	const double radialInset = (std::max)(0.55, (std::min)(1.35, Ro * 0.055 + filletRmm * 0.25));
+	const double radialCenter = (std::max)(0.0, riDraw - radialInset);
+	const double rTarget = (std::max)(filletRmm * 1.12, Ro * 0.017);
+	const double rPadRaw = (std::min)(rTarget, riDraw * 0.32);
+	const double rPadMax = radialCenter * 0.48;
+	const double rPad = (std::min)(rPadRaw, rPadMax);
+	if (rPad < 0.32 || thicknessH < 0.2 || radialCenter < 0.15)
+		return;
+
+	const double toRad = kPi / 180.0;
+	const double stepDeg = 360.0 / static_cast<double>(nValleys);
+
+	ksEntityPtr pSkPads = pPart->NewEntity(o3d_sketch);
+	ksSketchDefinitionPtr pPadSketchDef = pSkPads->GetDefinition();
+	pPadSketchDef->SetPlane(pPart->GetDefaultEntity(o3d_planeXOY));
+	pSkPads->Create();
+	ksDocument2DPtr p2Pad = pPadSketchDef->BeginEdit();
+	for (int k = 0; k < nValleys; ++k)
+	{
+		const double inDeg = -90.0 + (static_cast<double>(k) + 0.5) * stepDeg;
+		const double cx = radialCenter * std::cos(inDeg * toRad);
+		const double cy = radialCenter * std::sin(inDeg * toRad);
+		p2Pad->ksCircle(cx, cy, rPad, 1);
+	}
+	pPadSketchDef->EndEdit();
+
+	ksEntityPtr pPadBoss = pPart->NewEntity(o3d_bossExtrusion);
+	ksBossExtrusionDefinitionPtr pPadBossDef = pPadBoss->GetDefinition();
+	pPadBossDef->SetSketch(pSkPads);
+	pPadBossDef->directionType = dtNormal;
+	pPadBossDef->SetSideParam(TRUE, etBlind, thicknessH, 0, FALSE);
+	pPadBoss->Create();
+
+	try
+	{
+		pDoc->RebuildDocument();
+	}
+	catch (const _com_error&)
+	{
+	}
+
+	const double rfLow = (std::min)((std::max)(0.22, filletRmm * 0.48), rPad * 0.45);
+	const double rfHigh = (std::min)((std::max)(0.30, filletRmm * 0.68), rPad * 0.55);
+	const double zSplit = thicknessH * 0.5;
+
+	try
+	{
+		ksEntityCollectionPtr edges = pPart->EntityCollection(o3d_edge);
+
+		auto filletCircleEdgesZ = [&](double radius, bool bottomHalf) -> bool {
+			ksEntityPtr pF = pPart->NewEntity(o3d_fillet);
+			ksFilletDefinitionPtr fd = pF->GetDefinition();
+			fd->radius = radius;
+			ksEntityCollectionPtr ar = fd->array();
+			ar->Clear();
+			for (long i = 0; i < edges->GetCount(); ++i)
+			{
+				ksEntityPtr ed = edges->GetByIndex(i);
+				ksEdgeDefinitionPtr edef = ed->GetDefinition();
+				if (edef == nullptr || !edef->IsCircle())
+					continue;
+				if (edef->GetOwnerEntity() != pPadBoss)
+					continue;
+				const double zm = EdgeMidZ(edef);
+				if (bottomHalf)
+				{
+					if (zm > zSplit)
+						continue;
+				}
+				else
+				{
+					if (zm < zSplit)
+						continue;
+				}
+				ar->Add(ed);
+			}
+			if (ar->GetCount() <= 0)
+				return false;
+			pF->Create();
+			return true;
+		};
+
+		if (rfLow > 0.08)
+			filletCircleEdgesZ(rfLow, true);
+		try
+		{
+			pDoc->RebuildDocument();
+		}
+		catch (const _com_error&)
+		{
+		}
+		edges = pPart->EntityCollection(o3d_edge);
+		if (rfHigh > 0.10)
+			filletCircleEdgesZ(rfHigh, false);
+	}
+	catch (const _com_error& e)
+	{
+		AppendComError(err, e);
+	}
+}
+
 double SetscrewHoleRadiusMm(double seriesTorqueNm)
 {
 	if (seriesTorqueNm <= 31.5 + 1e-9)
@@ -129,6 +264,10 @@ void TryMeridianRevolveCutTriangle(
 {
 	if (xa < 0.01 || xb < 0.01 || xc < 0.01)
 		return;
+	const double cross =
+		(xb - xa) * (zc - za) - (zb - za) * (xc - xa);
+	if (std::fabs(cross) < 1e-6)
+		return;
 	try
 	{
 		ksEntityPtr pSketch = pPart->NewEntity(o3d_sketch);
@@ -187,7 +326,8 @@ void AddHalfCouplingHubEndAndJawFaceChamferCuts(
 	int gostTableId)
 {
 	const double cEnd = (gostTableId >= 2) ? 1.6 : 1.0;
-	const double cJaw = (std::min)(cEnd, 1.0);
+	double cJaw = (std::min)(cEnd, 1.0);
+	cJaw = (std::min)(cJaw, (std::max)(0.15, L_jaw * 0.22));
 
 	if (cEnd > 0.08 && rHub > rBore + cEnd + 0.15 && L1 > L_jaw + cEnd)
 	{
@@ -199,14 +339,76 @@ void AddHalfCouplingHubEndAndJawFaceChamferCuts(
 		TryMeridianRevolveCutTriangle(pPart, R, 0.0, R - cJaw, 0.0, R, cJaw);
 }
 
+static bool SpiderTryOuterCornerFillet(
+	double px,
+	double py,
+	double sx,
+	double sy,
+	double ex,
+	double ey,
+	double r,
+	double* oT1x,
+	double* oT1y,
+	double* oT2x,
+	double* oT2y,
+	double* oMx,
+	double* oMy)
+{
+	if (r < 0.025)
+		return false;
+	const double d1x = sx - px;
+	const double d1y = sy - py;
+	const double d2x = ex - sx;
+	const double d2y = ey - sy;
+	const double l1 = std::hypot(d1x, d1y);
+	const double l2 = std::hypot(d2x, d2y);
+	if (l1 < 1e-4 || l2 < 1e-4)
+		return false;
+	const double u1x = d1x / l1;
+	const double u1y = d1y / l1;
+	const double u2x = d2x / l2;
+	const double u2y = d2y / l2;
+	const double cphi = u1x * u2x + u1y * u2y;
+	const double phi = std::acos((std::max)(-1.0, (std::min)(1.0, cphi)));
+	if (phi < 1e-3 || phi > kPi - 1e-3)
+		return false;
+	double t = r / std::tan(phi * 0.5);
+	t = (std::min)(t, l1 * 0.42);
+	t = (std::min)(t, l2 * 0.42);
+	*oT1x = sx - u1x * t;
+	*oT1y = sy - u1y * t;
+	*oT2x = sx + u2x * t;
+	*oT2y = sy + u2y * t;
+	double bx = -u1x + u2x;
+	double by = -u1y + u2y;
+	const double bl = std::hypot(bx, by);
+	if (bl < 1e-8)
+		return false;
+	bx /= bl;
+	by /= bl;
+	if (bx * sx + by * sy > 0.0)
+	{
+		bx = -bx;
+		by = -by;
+	}
+	const double dist = r / std::sin(phi * 0.5);
+	*oMx = sx + bx * dist;
+	*oMy = sy + by * dist;
+	return true;
+}
+
 void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, double filletR, double legWidthB)
 {
-	const double riDraw =
-		(filletR > 0.02) ? (std::max)(Ro * 0.22, Ri - (std::min)(filletR * 1.55, Ri * 0.28)) : Ri;
+	const double riDraw = SpiderInnerValleyRadiusMm(Ro, Ri, filletR);
 	double capHalfDeg = (180.0 / kPi) * std::asin((std::min)(0.995, legWidthB / (2.0 * Ro)));
 	capHalfDeg = (std::max)(6.0, (std::min)(capHalfDeg, 180.0 / n - 1.0));
+	const bool fourRayChord90 = (n == 4);
+	if (fourRayChord90)
+		capHalfDeg = 45.0;
 
 	const double toRad = kPi / 180.0;
+	const double rCornerMin = (std::min)(0.10, (std::max)(0.025, Ro * 0.0045));
+	const double rCorner = (std::max)(rCornerMin, (std::min)(filletR, Ro * 0.15));
 
 	for (int k = 0; k < n; ++k)
 	{
@@ -226,18 +428,77 @@ void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, doub
 		const double xI = riDraw * std::cos(inDeg * toRad);
 		const double yI = riDraw * std::sin(inDeg * toRad);
 
-		double point_1[2][2]{};
-		point_1[0][0] = xP;
-		point_1[0][1] = yP;
-		point_1[1][0] = xS;
-		point_1[1][1] = yS;
-		p2DDoc->ksLineSeg(point_1[0][0], point_1[0][1], point_1[1][0], point_1[1][1], 1);
-		p2DDoc->ksArcByAngle(0.0, 0.0, Ro, a1, a2, 1, 1);
-		point_1[0][0] = xE;
-		point_1[0][1] = yE;
-		point_1[1][0] = xI;
-		point_1[1][1] = yI;
-		p2DDoc->ksLineSeg(point_1[0][0], point_1[0][1], point_1[1][0], point_1[1][1], 1);
+		if (fourRayChord90)
+		{
+			double t1sx, t1sy, t2sx, t2sy, msx, msy;
+			double t3ex, t3ey, t4ex, t4ey, mex, mey;
+			const bool okS = SpiderTryOuterCornerFillet(
+				xP,
+				yP,
+				xS,
+				yS,
+				xE,
+				yE,
+				rCorner,
+				&t1sx,
+				&t1sy,
+				&t2sx,
+				&t2sy,
+				&msx,
+				&msy);
+			const bool okE = SpiderTryOuterCornerFillet(
+				xS,
+				yS,
+				xE,
+				yE,
+				xI,
+				yI,
+				rCorner,
+				&t3ex,
+				&t3ey,
+				&t4ex,
+				&t4ey,
+				&mex,
+				&mey);
+			if (okS)
+			{
+				p2DDoc->ksLineSeg(xP, yP, t1sx, t1sy, 1);
+				p2DDoc->ksArcBy3Points(t1sx, t1sy, msx, msy, t2sx, t2sy, 1);
+			}
+			else
+				p2DDoc->ksLineSeg(xP, yP, xS, yS, 1);
+			if (okE)
+			{
+				const double ax = okS ? t2sx : xS;
+				const double ay = okS ? t2sy : yS;
+				p2DDoc->ksLineSeg(ax, ay, t3ex, t3ey, 1);
+				p2DDoc->ksArcBy3Points(t3ex, t3ey, mex, mey, t4ex, t4ey, 1);
+				p2DDoc->ksLineSeg(t4ex, t4ey, xI, yI, 1);
+			}
+			else if (okS)
+				p2DDoc->ksLineSeg(t2sx, t2sy, xE, yE, 1);
+			else
+				p2DDoc->ksLineSeg(xS, yS, xE, yE, 1);
+			if (!okE && !okS)
+				p2DDoc->ksLineSeg(xE, yE, xI, yI, 1);
+			else if (!okE && okS)
+				p2DDoc->ksLineSeg(xE, yE, xI, yI, 1);
+		}
+		else
+		{
+			double point_1[2][2]{};
+			point_1[0][0] = xP;
+			point_1[0][1] = yP;
+			point_1[1][0] = xS;
+			point_1[1][1] = yS;
+			p2DDoc->ksLineSeg(point_1[0][0], point_1[0][1], point_1[1][0], point_1[1][1], 1);
+			p2DDoc->ksArcByAngle(0.0, 0.0, Ro, a1, a2, 1, 1);
+			point_1[0][0] = xE;
+			point_1[0][1] = yE;
+			point_1[1][0] = xI;
+			point_1[1][1] = yI;
+			p2DDoc->ksLineSeg(point_1[0][0], point_1[0][1], point_1[1][0], point_1[1][1], 1);
+		}
 	}
 }
 
@@ -303,6 +564,17 @@ bool BuildSpiderPart(
 		pBossDef->directionType = dtNormal;
 		pBossDef->SetSideParam(TRUE, etBlind, H, 0, FALSE);
 		pBoss->Create();
+
+		try
+		{
+			pDoc->RebuildDocument();
+		}
+		catch (const _com_error&)
+		{
+		}
+
+		if (n == 4 || n == 6)
+			AddSpiderValleyPadsAndFillets(pPart, pDoc, Ro, Ri, rf, H, n, err);
 
 		try
 		{
@@ -406,176 +678,174 @@ void AddRadialLugs(
 
 	const double R = D * 0.5;
 	const double r = d * 0.5;
+	if (R <= r + 0.25)
+		return;
+
 	const double degStep = 360.0 / static_cast<double>(lugCount);
 	const double chordB = (std::max)(faceSlotB, faceSlotB1 * 0.52);
 	double halfAngleOuter = std::asin((std::min)(0.995, chordB / (2.0 * R)));
-	const double maxHalf = (kPi / static_cast<double>(lugCount)) * 0.48;
+	const double maxHalf = (kPi / static_cast<double>(lugCount)) * 0.46;
 	halfAngleOuter = (std::min)(halfAngleOuter, maxHalf);
-	halfAngleOuter = (std::max)(halfAngleOuter, 13.0 * kPi / 180.0);
+	halfAngleOuter = (std::max)(
+		halfAngleOuter,
+		(std::min)(11.0 * kPi / 180.0, maxHalf * 0.58));
+	halfAngleOuter = (std::min)(halfAngleOuter, maxHalf);
 
-	const double rIn = (std::max)(r + 0.6, R - toothRadialDepth);
-	const double rOut = R + toothRadialDepth;
-	double halfAngleInner = std::atan(std::tan(halfAngleOuter) * (rIn / R) * 0.82);
-	halfAngleInner = (std::max)(halfAngleInner, 7.0 * kPi / 180.0);
-	halfAngleInner = (std::min)(halfAngleInner, halfAngleOuter - 0.02);
+	double depthUse = (std::max)(1.2, toothRadialDepth);
+	depthUse = (std::min)(depthUse, (R - r) * 0.85);
+	depthUse = (std::min)(depthUse, R * 0.22);
+
+	const double rOut = (std::min)(R + depthUse, D * 0.52);
+	double rIn = (std::max)(r + 0.55, R - depthUse);
+	rIn = (std::min)(rIn, rOut - 0.35);
+	rIn = (std::max)(rIn, r + 0.35);
+	if (rOut <= rIn + 0.2 || rIn <= r + 0.15)
+		return;
+
+	double halfAngleInner = std::atan(std::tan(halfAngleOuter) * (rIn / R) * 0.88);
+	halfAngleInner = (std::max)(halfAngleInner, 6.5 * kPi / 180.0);
+	halfAngleInner = (std::min)(halfAngleInner, halfAngleOuter - 0.035);
 
 	const double toothH = (lengthL3mm > 0.6)
-		? (std::min)(lengthL3mm, L_jaw * 0.98)
-		: (std::min)(L_jaw * 0.92, (std::max)(4.0, spiderLegWidth * 1.15));
+		? (std::min)(lengthL3mm, L_jaw * 0.96)
+		: (std::min)(L_jaw * 0.90, (std::max)(3.5, spiderLegWidth * 1.08));
+	if (toothH < 0.8)
+		return;
 
 	const double a0 = -halfAngleInner;
 	const double a1 = halfAngleInner;
 	const double b0 = -halfAngleOuter;
 	const double b1 = halfAngleOuter;
 
-	ksEntityPtr pSkTooth = pPart->NewEntity(o3d_sketch);
-	ksSketchDefinitionPtr pSkToothDef = pSkTooth->GetDefinition();
-	pSkToothDef->SetPlane(pPart->GetDefaultEntity(o3d_planeXOY));
-	pSkTooth->Create();
-
-	ksDocument2DPtr p2DDoc = pSkToothDef->BeginEdit();
-	double point_1[4][2]{};
-	point_1[0][0] = rIn * std::cos(a0);
-	point_1[0][1] = rIn * std::sin(a0);
-	point_1[1][0] = rOut * std::cos(b0);
-	point_1[1][1] = rOut * std::sin(b0);
-	point_1[2][0] = rOut * std::cos(b1);
-	point_1[2][1] = rOut * std::sin(b1);
-	point_1[3][0] = rIn * std::cos(a1);
-	point_1[3][1] = rIn * std::sin(a1);
-	p2DDoc->ksLineSeg(point_1[0][0], point_1[0][1], point_1[1][0], point_1[1][1], 1);
-	p2DDoc->ksLineSeg(point_1[1][0], point_1[1][1], point_1[2][0], point_1[2][1], 1);
-	p2DDoc->ksLineSeg(point_1[2][0], point_1[2][1], point_1[3][0], point_1[3][1], 1);
-	p2DDoc->ksLineSeg(point_1[3][0], point_1[3][1], point_1[0][0], point_1[0][1], 1);
-	KsAxisLineXThroughOriginStyle3(p2DDoc);
-	pSkToothDef->EndEdit();
-
-	ksEntityPtr pToothBoss = pPart->NewEntity(o3d_bossExtrusion);
-	ksBossExtrusionDefinitionPtr pToothDef = pToothBoss->GetDefinition();
-	pToothDef->SetSketch(pSkTooth);
-	pToothDef->directionType = dtNormal;
-	pToothDef->SetSideParam(TRUE, etBlind, toothH, 0, FALSE);
-	pToothBoss->Create();
-
-	ksEntityPtr pAxis = pPart->GetDefaultEntity(o3d_axisOZ);
-	ksEntityPtr pCirc = pPart->NewEntity(o3d_circularCopy);
-	ksCircularCopyDefinitionPtr pCircDef = pCirc->GetDefinition();
-	pCircDef->SetAxis(pAxis);
-	pCircDef->count1 = 1;
-	pCircDef->count2 = lugCount;
-	pCircDef->step1 = degStep;
-	ksEntityCollectionPtr ops = pCircDef->GetOperationArray();
-	ops->Clear();
-	ops->Add(pToothBoss);
-	pCirc->Create();
-
-	(void)err;
-}
-
-void AddFaceSlotsSmallExec(
-	ksPartPtr pPart,
-	double D,
-	double d,
-	double cutDepth)
-{
-	const double R = D * 0.5;
-	const double r = d * 0.5;
-	const double span = 11.0 * (kPi / 180.0);
-	for (int k = 0; k < 2; ++k)
+	try
 	{
-		const double base = kPi / 4.0 + k * kPi;
-		const double a0 = base - span * 0.5;
-		const double a1 = base + span * 0.5;
-		const double r0 = r + 0.8;
-		const double r1 = R + 1.5;
+		ksEntityPtr pSkTooth = pPart->NewEntity(o3d_sketch);
+		ksSketchDefinitionPtr pSkToothDef = pSkTooth->GetDefinition();
+		pSkToothDef->SetPlane(pPart->GetDefaultEntity(o3d_planeXOY));
+		pSkTooth->Create();
 
-		ksEntityPtr pSk = pPart->NewEntity(o3d_sketch);
-		ksSketchDefinitionPtr pDef = pSk->GetDefinition();
-		pDef->SetPlane(pPart->GetDefaultEntity(o3d_planeXOY));
-		pSk->Create();
-		ksDocument2DPtr p2DDoc = pDef->BeginEdit();
+		ksDocument2DPtr p2DDoc = pSkToothDef->BeginEdit();
 		double point_1[4][2]{};
-		point_1[0][0] = r0 * std::cos(a0);
-		point_1[0][1] = r0 * std::sin(a0);
-		point_1[1][0] = r1 * std::cos(a0);
-		point_1[1][1] = r1 * std::sin(a0);
-		point_1[2][0] = r1 * std::cos(a1);
-		point_1[2][1] = r1 * std::sin(a1);
-		point_1[3][0] = r0 * std::cos(a1);
-		point_1[3][1] = r0 * std::sin(a1);
+		point_1[0][0] = rIn * std::cos(a0);
+		point_1[0][1] = rIn * std::sin(a0);
+		point_1[1][0] = rOut * std::cos(b0);
+		point_1[1][1] = rOut * std::sin(b0);
+		point_1[2][0] = rOut * std::cos(b1);
+		point_1[2][1] = rOut * std::sin(b1);
+		point_1[3][0] = rIn * std::cos(a1);
+		point_1[3][1] = rIn * std::sin(a1);
 		p2DDoc->ksLineSeg(point_1[0][0], point_1[0][1], point_1[1][0], point_1[1][1], 1);
 		p2DDoc->ksLineSeg(point_1[1][0], point_1[1][1], point_1[2][0], point_1[2][1], 1);
 		p2DDoc->ksLineSeg(point_1[2][0], point_1[2][1], point_1[3][0], point_1[3][1], 1);
 		p2DDoc->ksLineSeg(point_1[3][0], point_1[3][1], point_1[0][0], point_1[0][1], 1);
 		KsAxisLineXThroughOriginStyle3(p2DDoc);
-		pDef->EndEdit();
+		pSkToothDef->EndEdit();
 
-		ksEntityPtr pCut = pPart->NewEntity(o3d_cutExtrusion);
-		ksCutExtrusionDefinitionPtr pCutDef = pCut->GetDefinition();
-		pCutDef->SetSketch(pSk);
-		pCutDef->directionType = dtNormal;
-		pCutDef->SetSideParam(TRUE, etBlind, cutDepth, 0, FALSE);
-		pCut->Create();
+		ksEntityPtr pToothBoss = pPart->NewEntity(o3d_bossExtrusion);
+		ksBossExtrusionDefinitionPtr pToothDef = pToothBoss->GetDefinition();
+		pToothDef->SetSketch(pSkTooth);
+		pToothDef->directionType = dtNormal;
+		pToothDef->SetSideParam(TRUE, etBlind, toothH, 0, FALSE);
+		pToothBoss->Create();
+
+		ksEntityPtr pAxis = pPart->GetDefaultEntity(o3d_axisOZ);
+		ksEntityPtr pCirc = pPart->NewEntity(o3d_circularCopy);
+		ksCircularCopyDefinitionPtr pCircDef = pCirc->GetDefinition();
+		pCircDef->SetAxis(pAxis);
+		pCircDef->count1 = 1;
+		pCircDef->count2 = lugCount;
+		pCircDef->step1 = degStep;
+		ksEntityCollectionPtr ops = pCircDef->GetOperationArray();
+		ops->Clear();
+		ops->Add(pToothBoss);
+		pCirc->Create();
 	}
+	catch (const _com_error&)
+	{
+	}
+
+	(void)err;
 }
 
-void AddFaceSlotsLargeExec(
+void AddFaceSlotsBetweenLugs(
 	ksPartPtr pPart,
 	double D,
 	double d,
-	double B_slot,
-	double B1_slot,
-	double cutDepth)
+	double faceSlotB,
+	double faceSlotB1,
+	double cutDepth,
+	int lugCount,
+	int gostTableId)
 {
+	if (lugCount < 2 || cutDepth < 0.12)
+		return;
+
 	const double R = D * 0.5;
 	const double r = d * 0.5;
-	const double bEff = (std::max)(B_slot, (std::max)(0.0, B1_slot) * 0.72);
-	const double spanDeg = (std::max)(12.0, (std::min)(32.0, bEff * 4.8));
-	const double span = spanDeg * (kPi / 180.0);
-	const double r0 = (std::max)(r + 1.0, R - bEff * 2.2);
-	const double r1 = R + 1.2;
+	if (R <= r + 0.4)
+		return;
 
-	ksEntityPtr pSk = pPart->NewEntity(o3d_sketch);
-	ksSketchDefinitionPtr pDef = pSk->GetDefinition();
-	pDef->SetPlane(pPart->GetDefaultEntity(o3d_planeXOY));
-	pSk->Create();
-	ksDocument2DPtr p2DDoc = pDef->BeginEdit();
-	const double a0 = -span * 0.5;
-	const double a1 = span * 0.5;
-	double point_1[4][2]{};
-	point_1[0][0] = r0 * std::cos(a0);
-	point_1[0][1] = r0 * std::sin(a0);
-	point_1[1][0] = r1 * std::cos(a0);
-	point_1[1][1] = r1 * std::sin(a0);
-	point_1[2][0] = r1 * std::cos(a1);
-	point_1[2][1] = r1 * std::sin(a1);
-	point_1[3][0] = r0 * std::cos(a1);
-	point_1[3][1] = r0 * std::sin(a1);
-	p2DDoc->ksLineSeg(point_1[0][0], point_1[0][1], point_1[1][0], point_1[1][1], 1);
-	p2DDoc->ksLineSeg(point_1[1][0], point_1[1][1], point_1[2][0], point_1[2][1], 1);
-	p2DDoc->ksLineSeg(point_1[2][0], point_1[2][1], point_1[3][0], point_1[3][1], 1);
-	p2DDoc->ksLineSeg(point_1[3][0], point_1[3][1], point_1[0][0], point_1[0][1], 1);
-	KsAxisLineXThroughOriginStyle3(p2DDoc);
-	pDef->EndEdit();
+	const double bEff = (std::max)(faceSlotB, (std::max)(0.0, faceSlotB1) * 0.72);
+	double spanDeg;
+	if (gostTableId >= 2)
+		spanDeg = (std::max)(13.0, (std::min)(34.0, bEff * 4.6));
+	else
+		spanDeg = (std::max)(8.5, (std::min)(17.0, (std::max)(faceSlotB, 2.5) * 3.4));
 
-	ksEntityPtr pCut = pPart->NewEntity(o3d_cutExtrusion);
-	ksCutExtrusionDefinitionPtr pCutDef = pCut->GetDefinition();
-	pCutDef->SetSketch(pSk);
-	pCutDef->directionType = dtNormal;
-	pCutDef->SetSideParam(TRUE, etBlind, cutDepth, 0, FALSE);
-	pCut->Create();
+	const double angularPitch = 2.0 * kPi / static_cast<double>(lugCount);
+	const double maxSpan = angularPitch * 0.42;
+	const double span = (std::min)(spanDeg * (kPi / 180.0), maxSpan);
 
-	ksEntityPtr pAxis = pPart->GetDefaultEntity(o3d_axisOZ);
-	ksEntityPtr pCirc = pPart->NewEntity(o3d_circularCopy);
-	ksCircularCopyDefinitionPtr pCircDef = pCirc->GetDefinition();
-	pCircDef->SetAxis(pAxis);
-	pCircDef->count1 = 1;
-	pCircDef->count2 = 3;
-	pCircDef->step1 = 120.0;
-	ksEntityCollectionPtr ops = pCircDef->GetOperationArray();
-	ops->Clear();
-	ops->Add(pCut);
-	pCirc->Create();
+	double r1 = (std::min)(R + 1.65, D * 0.515);
+	double r0 = (std::max)(r + 0.75, R - bEff * 2.05);
+	r0 = (std::min)(r0, r1 - 1.15);
+	if (r0 <= r + 0.25 || r0 >= r1 - 0.25)
+		return;
+
+	const double cutUse = (std::min)(cutDepth, R * 0.38);
+	if (cutUse < 0.15)
+		return;
+
+	for (int k = 0; k < lugCount; ++k)
+	{
+		const double center = (2.0 * static_cast<double>(k) + 1.0) * (kPi / static_cast<double>(lugCount));
+		const double a0 = center - span * 0.5;
+		const double a1 = center + span * 0.5;
+
+		try
+		{
+			ksEntityPtr pSk = pPart->NewEntity(o3d_sketch);
+			ksSketchDefinitionPtr pDef = pSk->GetDefinition();
+			pDef->SetPlane(pPart->GetDefaultEntity(o3d_planeXOY));
+			pSk->Create();
+			ksDocument2DPtr p2DDoc = pDef->BeginEdit();
+			double point_1[4][2]{};
+			point_1[0][0] = r0 * std::cos(a0);
+			point_1[0][1] = r0 * std::sin(a0);
+			point_1[1][0] = r1 * std::cos(a0);
+			point_1[1][1] = r1 * std::sin(a0);
+			point_1[2][0] = r1 * std::cos(a1);
+			point_1[2][1] = r1 * std::sin(a1);
+			point_1[3][0] = r0 * std::cos(a1);
+			point_1[3][1] = r0 * std::sin(a1);
+			p2DDoc->ksLineSeg(point_1[0][0], point_1[0][1], point_1[1][0], point_1[1][1], 1);
+			p2DDoc->ksLineSeg(point_1[1][0], point_1[1][1], point_1[2][0], point_1[2][1], 1);
+			p2DDoc->ksLineSeg(point_1[2][0], point_1[2][1], point_1[3][0], point_1[3][1], 1);
+			p2DDoc->ksLineSeg(point_1[3][0], point_1[3][1], point_1[0][0], point_1[0][1], 1);
+			KsAxisLineXThroughOriginStyle3(p2DDoc);
+			pDef->EndEdit();
+
+			ksEntityPtr pCut = pPart->NewEntity(o3d_cutExtrusion);
+			ksCutExtrusionDefinitionPtr pCutDef = pCut->GetDefinition();
+			pCutDef->SetSketch(pSk);
+			pCutDef->directionType = dtNormal;
+			pCutDef->SetSideParam(TRUE, etBlind, cutUse, 0, FALSE);
+			pCut->Create();
+		}
+		catch (const _com_error&)
+		{
+		}
+	}
 }
 
 void AddSetScrewHole(
@@ -706,13 +976,11 @@ bool BuildHalfCouplingPart(
 			zKey1 = L1 - L_hub_seg * 0.1;
 		if (zKey1 <= zKey0 + 2.0)
 			zKey0 = L_jaw + L_hub_seg * 0.12;
+		zKey0 = (std::max)(zKey0, L_jaw + 0.2);
+		zKey1 = (std::min)(zKey1, L1 - 0.2);
+		if (zKey1 <= zKey0 + 1.8)
+			zKey1 = L1 - 0.15;
 		AddKeywayOnHub(pPart, rHub, zKey0, zKey1, keyHalfW, keyDepth + 0.5, h.filletR);
-
-		const double slotCut = (std::min)(L_jaw * 0.55, 8.0);
-		if (h.gostTableId == 1)
-			AddFaceSlotsSmallExec(pPart, D, d, slotCut);
-		else
-			AddFaceSlotsLargeExec(pPart, D, d, h.faceSlotB, h.faceSlotB1, slotCut);
 
 		const int nLug = (std::max)(2, lugCount);
 		const double toothDepth = (std::min)(8.5, (std::max)(2.8, spiderLegWidth * 0.62));
@@ -729,10 +997,24 @@ bool BuildHalfCouplingPart(
 			spiderLegWidth,
 			err);
 
+		const double slotCut = (std::min)((std::min)(L_jaw * 0.52, 7.5), R * 0.35);
+		AddFaceSlotsBetweenLugs(
+			pPart,
+			D,
+			d,
+			h.faceSlotB,
+			h.faceSlotB1,
+			slotCut,
+			nLug,
+			h.gostTableId);
+
 		if (h.gostTableId >= 2 && h.lengthL2 > 1.0)
 		{
-			const double zHole = L_jaw + (std::min)(h.lengthL2 * 0.45, L_hub_seg * 0.85);
-			AddSetScrewHole(pPart, rHub, zHole, SetscrewHoleRadiusMm(gostSeriesTorqueNm));
+			double zHole = L_jaw + (std::min)(h.lengthL2 * 0.45, L_hub_seg * 0.85);
+			zHole = (std::max)(zHole, L_jaw + 0.35);
+			zHole = (std::min)(zHole, L1 - 0.55);
+			if (zHole > L_jaw + 0.2 && zHole < L1 - 0.15)
+				AddSetScrewHole(pPart, rHub, zHole, SetscrewHoleRadiusMm(gostSeriesTorqueNm));
 		}
 
 		AddHalfCouplingHubEndAndJawFaceChamferCuts(pPart, R, r, rHub, L_jaw, L1, h.gostTableId);
