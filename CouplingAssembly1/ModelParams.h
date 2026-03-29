@@ -4,6 +4,7 @@ struct AssemblyParams
 {
 	double torque;
 	int execution;
+	int courseVariant;
 	double shaftDiameter1;
 	double shaftDiameter2;
 
@@ -16,6 +17,7 @@ struct AssemblyParams
 	AssemblyParams()
 		: torque(16.0),
 		  execution(2),
+		  courseVariant(1),
 		  shaftDiameter1(16.0),
 		  shaftDiameter2(16.0),
 		  assemblyLengthL(81.0),

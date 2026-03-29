@@ -9,6 +9,14 @@ double SnapTorqueToSeries(double torqueNm);
 
 int ClampExecution(int execution);
 
+int ExecutionFromCourseVariant(int courseVariant);
+
+void ApplyCourseVariantRule(
+	AssemblyParams& assembly,
+	HalfCouplingParams& half1,
+	HalfCouplingParams& half2,
+	SpiderParams& spider);
+
 void ApplyAssemblyToParts(
 	AssemblyParams& assembly,
 	HalfCouplingParams& half1,

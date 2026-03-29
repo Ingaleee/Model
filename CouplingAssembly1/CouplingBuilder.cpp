@@ -15,7 +15,7 @@ bool CCouplingBuilder::Build(const CCouplingAssembly1Doc& doc) const
 	if (CouplingBuildInKompas(doc, &kompasErr))
 	{
 		CString msg =
-			L"В КОМПАС-3D созданы три новых детали (три документа):\n"
+			L"Готово к демонстрации: в КОМПАС-3D созданы три детали (три документа):\n"
 			L"— звёздочка: замкнутый контур и выдавливание на толщину H;\n"
 			L"— каждая полумуфта: кольцо под губки (D, d), ступица (d₁), круговой "
 			L"массив губок (по числу лучей звёздочки), шпоночный паз на ступице.\n\n"
@@ -56,15 +56,16 @@ CString CCouplingBuilder::MakeBuildMessage(const CCouplingAssembly1Doc& doc) con
 		L"Сборка (табл. 21.3.1)\n"
 		L"  Момент (заданный): %.2f Н·м\n"
 		L"  Ряд таблицы: %.1f Н·м\n"
-		L"  Исполнение: %d\n"
-		L"  Вал 1 / вал 2: %.2f / %.2f мм\n"
+		L"  Исполнение ГОСТ: %d (%s)  |  вариант задания: %d\n"
+		L"  Параметризация: варианты 2 и 5 → исп.1 и 4 луча; 1,3,4,6,7,8 → исп.2 и 6 лучей.\n"
+		L"  Валы 1 и 2 (две полумуфты при одном исполнении): %.2f / %.2f мм\n"
 		L"  L=%.2f мм  D₁=%.2f мм  n_max=%.0f об/мин\n"
 		L"  m=%.3f кг  b₁=%.2f мм\n\n"
-		L"Полумуфта 1 (табл. 1 или 2)\n"
+		L"Полумуфта 1 — вал 1 (табл. 1 или 2)\n"
 		L"  d=%.2f  D=%.2f  L₁=%.2f  l=%.2f\n"
 		L"  d₁=%.2f  b=%.2f  d+t₁=%.2f  B=%.2f  B₁=%.2f\n"
 		L"  l₂=%.2f  l₃=%.2f  r=%.2f  губки=%d\n\n"
-		L"Полумуфта 2\n"
+		L"Полумуфта 2 — вал 2\n"
 		L"  d=%.2f  D=%.2f  L₁=%.2f  l=%.2f\n"
 		L"  d₁=%.2f  b=%.2f  d+t₁=%.2f  B=%.2f  B₁=%.2f\n"
 		L"  l₂=%.2f  l₃=%.2f  r=%.2f  губки=%d\n\n"
@@ -74,6 +75,8 @@ CString CCouplingBuilder::MakeBuildMessage(const CCouplingAssembly1Doc& doc) con
 		assembly.torque,
 		tRow,
 		assembly.execution,
+		(assembly.execution == 1) ? L"2 губки, звезда 4 луча" : L"3 губки, звезда 6 лучей",
+		assembly.courseVariant,
 		assembly.shaftDiameter1,
 		assembly.shaftDiameter2,
 		assembly.assemblyLengthL,

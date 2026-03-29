@@ -65,7 +65,11 @@ END_MESSAGE_MAP()
 BOOL CSpiderParamsDlg::OnInitDialog()
 {
 	CDialogEx::OnInitDialog();
-	SetWindowTextW(L"Параметры звёздочки");
+	SetWindowTextW(L"Шаг 4 из 4 — звёздочка (эластичная вставка)");
+	m_rays = (GostTables::ExecutionFromCourseVariant(m_gostAssembly.courseVariant) == 1) ? 4 : 6;
+	if (CEdit* e = (CEdit*)GetDlgItem(IDC_EDIT_SPIDER_RAYS))
+		e->SetReadOnly(TRUE);
+	UpdateData(FALSE);
 	return TRUE;
 }
 
@@ -97,11 +101,11 @@ void CSpiderParamsDlg::OnSpiderFromGost()
 SpiderParams CSpiderParamsDlg::GetParams() const
 {
 	SpiderParams p = m_saved;
+	p.rays = (GostTables::ExecutionFromCourseVariant(m_gostAssembly.courseVariant) == 1) ? 4 : 6;
 	p.outerDiameter = m_outerDiameter;
 	p.innerDiameter = m_innerDiameter;
 	p.thickness = m_thickness;
 	p.legWidth = m_legWidth;
-	p.rays = m_rays;
 	p.filletRadius = m_filletRadius;
 	p.massKg = m_massKg;
 	return p;

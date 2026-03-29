@@ -24,11 +24,15 @@ protected:
 
 	void RefreshDerivedFromGost();
 	void OnAsmFromGost();
+	void SyncExecutionFromCourseVariant();
+
+	afx_msg void OnKillfocusEditAssemblyVariant();
 
 private:
 	AssemblyParams m_saved;
 	double m_torque;
 	int m_execution;
+	int m_courseVariant;
 	double m_shaft1;
 	double m_shaft2;
 	double m_derL;

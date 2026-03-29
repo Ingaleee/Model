@@ -97,7 +97,25 @@ END_MESSAGE_MAP()
 BOOL CHalfCouplingParamsDlg::OnInitDialog()
 {
 	CDialogEx::OnInitDialog();
-	SetWindowTextW(L"Параметры полумуфты");
+	const double dShaft =
+		(m_couplingIndex == 2) ? m_gostAssembly.shaftDiameter2 : m_gostAssembly.shaftDiameter1;
+	const int ex = (m_gostAssembly.execution == 1) ? 1 : 2;
+	const wchar_t* starTxt =
+		(ex == 1) ? L"исп.1: 2 губки, звезда 4 луча" : L"исп.2: 3 губки, звезда 6 лучей";
+	CString cap;
+	const int step = (m_couplingIndex == 1) ? 2 : 3;
+	cap.Format(
+		L"Шаг %d из 4 — полумуфта %d (вал %d), d вала %.1f мм. %s",
+		step,
+		m_couplingIndex,
+		m_couplingIndex,
+		dShaft,
+		starTxt);
+	SetWindowTextW(cap);
+	m_lugs = (GostTables::ExecutionFromCourseVariant(m_gostAssembly.courseVariant) == 1) ? 2 : 3;
+	if (CEdit* e = (CEdit*)GetDlgItem(IDC_EDIT_HALF_LUGS))
+		e->SetReadOnly(TRUE);
+	UpdateData(FALSE);
 	return TRUE;
 }
 
@@ -143,12 +161,15 @@ void CHalfCouplingParamsDlg::OnHalfFromGost()
 	}
 
 	PushToFields(trial);
+	m_lugs = (GostTables::ExecutionFromCourseVariant(m_gostAssembly.courseVariant) == 1) ? 2 : 3;
 	UpdateData(FALSE);
 }
 
 HalfCouplingParams CHalfCouplingParamsDlg::GetParams() const
 {
 	HalfCouplingParams p = m_saved;
+	const int ex = GostTables::ExecutionFromCourseVariant(m_gostAssembly.courseVariant);
+	p.lugCount = (ex == 1) ? 2 : 3;
 	p.boreDiameter = m_boreDiameter;
 	p.outerDiameter = m_outerDiameter;
 	p.lengthTotalL1 = m_l1;
@@ -161,7 +182,6 @@ HalfCouplingParams CHalfCouplingParamsDlg::GetParams() const
 	p.faceSlotB = m_faceB;
 	p.faceSlotB1 = m_faceB1;
 	p.filletR = m_r;
-	p.lugCount = m_lugs;
 	p.gostTableId = m_tableId;
 	p.SyncLegacyAliases();
 	return p;

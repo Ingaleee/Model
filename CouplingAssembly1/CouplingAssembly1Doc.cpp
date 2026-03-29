@@ -14,9 +14,10 @@
 namespace
 {
 constexpr DWORD kArchiveSig = 0x4D463143;
-constexpr DWORD kArchiveVer = 1;
+constexpr DWORD kArchiveVer = 2;
+constexpr DWORD kArchiveVerMin = 1;
 
-void ArchiveAssembly(CArchive& ar, AssemblyParams& a)
+void ArchiveAssembly(CArchive& ar, AssemblyParams& a, DWORD fileVer)
 {
 	if (ar.IsStoring())
 	{
@@ -24,6 +25,7 @@ void ArchiveAssembly(CArchive& ar, AssemblyParams& a)
 		ar << a.execution;
 		ar << a.shaftDiameter1 << a.shaftDiameter2;
 		ar << a.assemblyLengthL << a.envelopeD1 << a.maxSpeedRpm << a.massKg << a.widthB1;
+		ar << a.courseVariant;
 	}
 	else
 	{
@@ -31,6 +33,10 @@ void ArchiveAssembly(CArchive& ar, AssemblyParams& a)
 		ar >> a.execution;
 		ar >> a.shaftDiameter1 >> a.shaftDiameter2;
 		ar >> a.assemblyLengthL >> a.envelopeD1 >> a.maxSpeedRpm >> a.massKg >> a.widthB1;
+		if (fileVer >= 2)
+			ar >> a.courseVariant;
+		else
+			a.courseVariant = 1;
 	}
 }
 
@@ -109,7 +115,7 @@ void CCouplingAssembly1Doc::Serialize(CArchive& ar)
 		ar << kArchiveSig;
 		ar << kArchiveVer;
 		ar << static_cast<int>(m_selectedNode);
-		ArchiveAssembly(ar, m_assemblyParams);
+		ArchiveAssembly(ar, m_assemblyParams, kArchiveVer);
 		ArchiveHalf(ar, m_halfCoupling1Params);
 		ArchiveHalf(ar, m_halfCoupling2Params);
 		ArchiveSpider(ar, m_spiderParams);
@@ -127,7 +133,7 @@ void CCouplingAssembly1Doc::Serialize(CArchive& ar)
 		}
 		DWORD ver = 0;
 		ar >> ver;
-		if (ver != kArchiveVer)
+		if (ver < kArchiveVerMin || ver > kArchiveVer)
 		{
 			AfxMessageBox(L"Версия файла не поддерживается.", MB_OK | MB_ICONWARNING);
 			AfxThrowArchiveException(CArchiveException::badSchema);
@@ -137,10 +143,15 @@ void CCouplingAssembly1Doc::Serialize(CArchive& ar)
 		if (node < NodeAssembly || node > NodeSpider)
 			node = NodeAssembly;
 		m_selectedNode = static_cast<ESelectedNode>(node);
-		ArchiveAssembly(ar, m_assemblyParams);
+		ArchiveAssembly(ar, m_assemblyParams, ver);
 		ArchiveHalf(ar, m_halfCoupling1Params);
 		ArchiveHalf(ar, m_halfCoupling2Params);
 		ArchiveSpider(ar, m_spiderParams);
+		GostTables::ApplyCourseVariantRule(
+			m_assemblyParams,
+			m_halfCoupling1Params,
+			m_halfCoupling2Params,
+			m_spiderParams);
 	}
 }
 
@@ -189,6 +200,11 @@ void CCouplingAssembly1Doc::SetHalfCoupling1Params(const HalfCouplingParams& par
 {
 	m_halfCoupling1Params = params;
 	m_halfCoupling1Params.SyncLegacyAliases();
+	GostTables::ApplyCourseVariantRule(
+		m_assemblyParams,
+		m_halfCoupling1Params,
+		m_halfCoupling2Params,
+		m_spiderParams);
 }
 
 const HalfCouplingParams& CCouplingAssembly1Doc::GetHalfCoupling2Params() const
@@ -200,6 +216,11 @@ void CCouplingAssembly1Doc::SetHalfCoupling2Params(const HalfCouplingParams& par
 {
 	m_halfCoupling2Params = params;
 	m_halfCoupling2Params.SyncLegacyAliases();
+	GostTables::ApplyCourseVariantRule(
+		m_assemblyParams,
+		m_halfCoupling1Params,
+		m_halfCoupling2Params,
+		m_spiderParams);
 }
 
 const SpiderParams& CCouplingAssembly1Doc::GetSpiderParams() const
@@ -210,6 +231,11 @@ const SpiderParams& CCouplingAssembly1Doc::GetSpiderParams() const
 void CCouplingAssembly1Doc::SetSpiderParams(const SpiderParams& params)
 {
 	m_spiderParams = params;
+	GostTables::ApplyCourseVariantRule(
+		m_assemblyParams,
+		m_halfCoupling1Params,
+		m_halfCoupling2Params,
+		m_spiderParams);
 }
 
 #ifdef _DEBUG

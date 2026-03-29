@@ -15,6 +15,7 @@ CAssemblyParamsDlg::CAssemblyParamsDlg(const AssemblyParams& params, CWnd* pPare
 	, m_saved(params)
 	, m_torque(params.torque)
 	, m_execution(params.execution)
+	, m_courseVariant(params.courseVariant)
 	, m_shaft1(params.shaftDiameter1)
 	, m_shaft2(params.shaftDiameter2)
 	, m_derL(params.assemblyLengthL)
@@ -33,7 +34,8 @@ void CAssemblyParamsDlg::RefreshDerivedFromGost()
 {
 	AssemblyParams a = m_saved;
 	a.torque = m_torque;
-	a.execution = m_execution;
+	a.courseVariant = m_courseVariant;
+	a.execution = GostTables::ExecutionFromCourseVariant(a.courseVariant);
 	a.shaftDiameter1 = m_shaft1;
 	a.shaftDiameter2 = m_shaft2;
 	GostTables::FillAssemblyTable2131(a);
@@ -50,7 +52,8 @@ void CAssemblyParamsDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Text(pDX, IDC_EDIT_ASSEMBLY_TORQUE, m_torque);
 	DDV_MinMaxDouble(pDX, m_torque, 0.01, 1.0e5);
 	DDX_Text(pDX, IDC_EDIT_ASSEMBLY_EXECUTION, m_execution);
-	DDV_MinMaxInt(pDX, m_execution, 1, 2);
+	DDX_Text(pDX, IDC_EDIT_ASSEMBLY_VARIANT, m_courseVariant);
+	DDV_MinMaxInt(pDX, m_courseVariant, 1, 8);
 	DDX_Text(pDX, IDC_EDIT_ASSEMBLY_SHAFT1, m_shaft1);
 	DDV_MinMaxDouble(pDX, m_shaft1, 1.0, 500.0);
 	DDX_Text(pDX, IDC_EDIT_ASSEMBLY_SHAFT2, m_shaft2);
@@ -64,21 +67,38 @@ void CAssemblyParamsDlg::DoDataExchange(CDataExchange* pDX)
 
 BEGIN_MESSAGE_MAP(CAssemblyParamsDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BTN_ASM_FROM_GOST, &CAssemblyParamsDlg::OnAsmFromGost)
+	ON_EN_KILLFOCUS(IDC_EDIT_ASSEMBLY_VARIANT, &CAssemblyParamsDlg::OnKillfocusEditAssemblyVariant)
 END_MESSAGE_MAP()
 
 BOOL CAssemblyParamsDlg::OnInitDialog()
 {
 	CDialogEx::OnInitDialog();
-	SetWindowTextW(L"Параметры сборки");
+	SetWindowTextW(L"Шаг 1 из 4 — сборка (табл. 21.3.1 ГОСТ 2131)");
+	SyncExecutionFromCourseVariant();
 	RefreshDerivedFromGost();
 	UpdateData(FALSE);
 	return TRUE;
+}
+
+void CAssemblyParamsDlg::SyncExecutionFromCourseVariant()
+{
+	m_execution = GostTables::ExecutionFromCourseVariant(m_courseVariant);
+}
+
+void CAssemblyParamsDlg::OnKillfocusEditAssemblyVariant()
+{
+	if (!UpdateData(TRUE))
+		return;
+	SyncExecutionFromCourseVariant();
+	RefreshDerivedFromGost();
+	UpdateData(FALSE);
 }
 
 void CAssemblyParamsDlg::OnAsmFromGost()
 {
 	if (!UpdateData(TRUE))
 		return;
+	SyncExecutionFromCourseVariant();
 	RefreshDerivedFromGost();
 	UpdateData(FALSE);
 }
@@ -87,7 +107,8 @@ AssemblyParams CAssemblyParamsDlg::GetParams() const
 {
 	AssemblyParams p = m_saved;
 	p.torque = m_torque;
-	p.execution = m_execution;
+	p.courseVariant = m_courseVariant;
+	p.execution = GostTables::ExecutionFromCourseVariant(p.courseVariant);
 	p.shaftDiameter1 = m_shaft1;
 	p.shaftDiameter2 = m_shaft2;
 	GostTables::FillAssemblyTable2131(p);

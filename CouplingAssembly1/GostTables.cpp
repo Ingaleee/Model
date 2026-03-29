@@ -304,6 +304,29 @@ int ClampExecution(int execution)
 	return execution;
 }
 
+int ExecutionFromCourseVariant(int courseVariant)
+{
+	if (courseVariant == 2 || courseVariant == 5)
+		return 1;
+	return 2;
+}
+
+void ApplyCourseVariantRule(
+	AssemblyParams& assembly,
+	HalfCouplingParams& half1,
+	HalfCouplingParams& half2,
+	SpiderParams& spider)
+{
+	const int ex = ExecutionFromCourseVariant(assembly.courseVariant);
+	assembly.execution = ex;
+	spider.rays = (ex == 1) ? 4 : 6;
+	const int lugs = (ex == 1) ? 2 : 3;
+	half1.lugCount = lugs;
+	half2.lugCount = lugs;
+	half1.SyncLegacyAliases();
+	half2.SyncLegacyAliases();
+}
+
 void FillAssemblyTable2131(AssemblyParams& assembly)
 {
 	const double t = SnapTorqueToSeries(assembly.torque);
@@ -342,6 +365,12 @@ void LookupSpiderFromGost(const AssemblyParams& assembly, SpiderParams& spider)
 	if (sr != nullptr)
 		FillSpiderFromRow(spider, *sr);
 	spider.rays = (exec == 1) ? 4 : 6;
+
+	const Asm2131Row* ar = FindAsm2131(t, exec);
+	if (ar == nullptr && exec == 1)
+		ar = FindAsm2131(t, 2);
+	if (ar != nullptr && ar->R_asm > 0.04)
+		spider.filletRadius = (std::max)(spider.filletRadius, ar->R_asm);
 }
 
 void ApplyAssemblyToParts(
@@ -350,10 +379,12 @@ void ApplyAssemblyToParts(
 	HalfCouplingParams& half2,
 	SpiderParams& spider)
 {
+	ApplyCourseVariantRule(assembly, half1, half2, spider);
 	FillAssemblyTable2131(assembly);
 	LookupHalfFromGost(assembly, half1, assembly.shaftDiameter1);
 	LookupHalfFromGost(assembly, half2, assembly.shaftDiameter2);
 	LookupSpiderFromGost(assembly, spider);
+	ApplyCourseVariantRule(assembly, half1, half2, spider);
 }
 
 }
