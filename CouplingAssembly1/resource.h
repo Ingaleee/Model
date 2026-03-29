@@ -9,6 +9,7 @@
 #define IDC_EDIT_ASSEMBLY_EXECUTION     1002
 #define IDC_EDIT_ASSEMBLY_SHAFT1        1003
 #define IDC_EDIT_ASSEMBLY_SHAFT2        1004
+#define IDC_EDIT_ASSEMBLY_VARIANT       1051
 #define IDC_EDIT_HALF_BORE              1011
 #define IDC_EDIT_HALF_OUTER             1012
 #define IDC_EDIT_HALF_LENGTH            1013
@@ -46,13 +47,14 @@
 #define ID_PARAMS_HALF2                 32804
 #define ID_PARAMS_SPIDER                32805
 #define ID_REAPPLY_GOST_ALL             32806
+#define ID_HELP_WORKFLOW                32807
 #define ID_BUILD_COUPLING               40001
 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        316
-#define _APS_NEXT_COMMAND_VALUE         40003
-#define _APS_NEXT_CONTROL_VALUE         1051
+#define _APS_NEXT_COMMAND_VALUE         40004
+#define _APS_NEXT_CONTROL_VALUE         1052
 #define _APS_NEXT_SYMED_VALUE           310
 #endif
 #endif

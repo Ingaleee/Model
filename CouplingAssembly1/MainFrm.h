@@ -10,7 +10,7 @@ protected:
 	DECLARE_DYNCREATE(CMainFrame)
 
 	CSplitterWnd m_wndSplitter;
-	CMenu m_menuParameters;
+	CMenu m_menuAssignment;
 
 	virtual BOOL OnCreateClient(LPCREATESTRUCT lpcs, CCreateContext* pContext);
 
@@ -46,6 +46,8 @@ protected:
 	afx_msg void OnUpdateReapplyGostAll(CCmdUI* pCmdUI);
 	afx_msg void OnBuildCoupling();
 	afx_msg void OnUpdateBuildCoupling(CCmdUI* pCmdUI);
+	afx_msg void OnHelpWorkflow();
+	afx_msg void OnUpdateParamsCurrent(CCmdUI* pCmdUI);
 
 	DECLARE_MESSAGE_MAP()
 };

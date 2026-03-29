@@ -51,16 +51,16 @@ void CAsmTreeView::OnInitialUpdate()
 	CTreeCtrl& tree = GetTreeCtrl();
 	tree.DeleteAllItems();
 
-	HTREEITEM hRoot = tree.InsertItem(L"Сборка");
+	HTREEITEM hRoot = tree.InsertItem(L"1) Сборка — клик: превью, двойной клик: параметры");
 	tree.SetItemData(hRoot, NodeAssembly);
 
-	HTREEITEM hHalf1 = tree.InsertItem(L"Полумуфта 1", hRoot);
+	HTREEITEM hHalf1 = tree.InsertItem(L"2) Полумуфта 1 (вал 1)", hRoot);
 	tree.SetItemData(hHalf1, NodeHalfCoupling1);
 
-	HTREEITEM hHalf2 = tree.InsertItem(L"Полумуфта 2", hRoot);
+	HTREEITEM hHalf2 = tree.InsertItem(L"3) Полумуфта 2 (вал 2)", hRoot);
 	tree.SetItemData(hHalf2, NodeHalfCoupling2);
 
-	HTREEITEM hSpider = tree.InsertItem(L"Звёздочка", hRoot);
+	HTREEITEM hSpider = tree.InsertItem(L"4) Звёздочка", hRoot);
 	tree.SetItemData(hSpider, NodeSpider);
 
 	tree.Expand(hRoot, TVE_EXPAND);
@@ -178,9 +178,9 @@ void CAsmTreeView::OnNMRclick(NMHDR* pNMHDR, LRESULT* pResult)
 
 	CMenu menu;
 	menu.CreatePopupMenu();
-	menu.AppendMenu(MF_STRING, ID_PARAMS_CURRENT, L"Параметры…");
+	menu.AppendMenu(MF_STRING, ID_PARAMS_CURRENT, L"Открыть параметры этого узла…");
 	menu.AppendMenu(MF_SEPARATOR);
-	menu.AppendMenu(MF_STRING, ID_BUILD_COUPLING, L"Построить");
+	menu.AppendMenu(MF_STRING, ID_BUILD_COUPLING, L"Построить в КОМПАС-3D (показать сводку)…");
 
 	menu.TrackPopupMenu(
 		TPM_LEFTALIGN | TPM_RIGHTBUTTON,

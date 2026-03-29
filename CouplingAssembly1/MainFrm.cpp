@@ -28,6 +28,8 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWnd)
 	ON_UPDATE_COMMAND_UI(ID_REAPPLY_GOST_ALL, &CMainFrame::OnUpdateReapplyGostAll)
 	ON_COMMAND(ID_BUILD_COUPLING, &CMainFrame::OnBuildCoupling)
 	ON_UPDATE_COMMAND_UI(ID_BUILD_COUPLING, &CMainFrame::OnUpdateBuildCoupling)
+	ON_COMMAND(ID_HELP_WORKFLOW, &CMainFrame::OnHelpWorkflow)
+	ON_UPDATE_COMMAND_UI(ID_PARAMS_CURRENT, &CMainFrame::OnUpdateParamsCurrent)
 END_MESSAGE_MAP()
 
 static UINT indicators[] =
@@ -51,7 +53,7 @@ BOOL CMainFrame::OnCreateClient(LPCREATESTRUCT lpcs, CCreateContext* pContext)
 	if (!m_wndSplitter.CreateStatic(this, 1, 2))
 		return FALSE;
 
-	if (!m_wndSplitter.CreateView(0, 0, RUNTIME_CLASS(CAsmTreeView), CSize(250, 100), pContext))
+	if (!m_wndSplitter.CreateView(0, 0, RUNTIME_CLASS(CAsmTreeView), CSize(288, 100), pContext))
 		return FALSE;
 
 	if (!m_wndSplitter.CreateView(0, 1, RUNTIME_CLASS(CAsmPreviewView), CSize(800, 100), pContext))
@@ -94,16 +96,38 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	CMenu* pMainMenu = GetMenu();
 	if (pMainMenu != nullptr)
 	{
-		m_menuParameters.CreatePopupMenu();
-		m_menuParameters.AppendMenu(MF_STRING, ID_PARAMS_ASSEMBLY, L"Параметры сборки");
-		m_menuParameters.AppendMenu(MF_STRING, ID_PARAMS_HALF1, L"Параметры полумуфты 1");
-		m_menuParameters.AppendMenu(MF_STRING, ID_PARAMS_HALF2, L"Параметры полумуфты 2");
-		m_menuParameters.AppendMenu(MF_STRING, ID_PARAMS_SPIDER, L"Параметры звёздочки");
-		m_menuParameters.AppendMenu(MF_SEPARATOR, 0, _T(""));
-		m_menuParameters.AppendMenu(MF_STRING, ID_REAPPLY_GOST_ALL, L"Пересчитать всё по ГОСТ");
+		m_menuAssignment.CreatePopupMenu();
+		m_menuAssignment.AppendMenu(
+			MF_STRING,
+			ID_PARAMS_ASSEMBLY,
+			L"1) Сборка — момент, исполнение ГОСТ, валы, вариант…");
+		m_menuAssignment.AppendMenu(
+			MF_STRING,
+			ID_PARAMS_HALF1,
+			L"2) Полумуфта 1 (под вал 1)…");
+		m_menuAssignment.AppendMenu(
+			MF_STRING,
+			ID_PARAMS_HALF2,
+			L"3) Полумуфта 2 (под вал 2)…");
+		m_menuAssignment.AppendMenu(MF_STRING, ID_PARAMS_SPIDER, L"4) Звёздочка…");
+		m_menuAssignment.AppendMenu(MF_SEPARATOR, 0, _T(""));
+		m_menuAssignment.AppendMenu(
+			MF_STRING,
+			ID_PARAMS_CURRENT,
+			L"Параметры выбранного узла (как двойной клик по дереву)");
+		m_menuAssignment.AppendMenu(MF_SEPARATOR, 0, _T(""));
+		m_menuAssignment.AppendMenu(
+			MF_STRING,
+			ID_REAPPLY_GOST_ALL,
+			L"Подставить ГОСТ во все узлы (сборка + обе полумуфты + звезда)");
+		m_menuAssignment.AppendMenu(MF_SEPARATOR, 0, _T(""));
+		m_menuAssignment.AppendMenu(
+			MF_STRING,
+			ID_BUILD_COUPLING,
+			L"Готово: построить в КОМПАС-3D и показать сводку");
 
-		pMainMenu->AppendMenu(MF_POPUP, (UINT_PTR)m_menuParameters.GetSafeHmenu(), L"Параметры");
-		pMainMenu->AppendMenu(MF_STRING, ID_BUILD_COUPLING, L"Построить");
+		pMainMenu->InsertMenu(1, MF_BYPOSITION | MF_POPUP, (UINT_PTR)m_menuAssignment.GetSafeHmenu(), L"Задание");
+		pMainMenu->AppendMenu(MF_STRING, ID_BUILD_COUPLING, L"КОМПАС-3D: построить муфту");
 
 		DrawMenuBar();
 	}
@@ -259,6 +283,30 @@ void CMainFrame::OnBuildCoupling()
 void CMainFrame::OnUpdateBuildCoupling(CCmdUI* pCmdUI)
 {
 	pCmdUI->Enable(GetDocumentSafe() != nullptr);
+}
+
+void CMainFrame::OnUpdateParamsCurrent(CCmdUI* pCmdUI)
+{
+	pCmdUI->Enable(GetDocumentSafe() != nullptr);
+}
+
+void CMainFrame::OnHelpWorkflow()
+{
+	static const wchar_t kHelp[] =
+		L"Краткий порядок для защиты / демонстрации\n\n"
+		L"Параметризация по варианту задания (1…8): только варианты 2 и 5 — звезда 4 луча и исполнение "
+		L"ГОСТ 1 (две губки); во всех остальных вариантах — 6 лучей и исполнение 2 (три губки). "
+		L"Номер исполнения вводить не нужно: он выставляется автоматически.\n\n"
+		L"1. Меню «Задание» → пункт 1) Сборка: момент, вариант задания (1…8), диаметры валов. "
+		L"Нажмите «Подставить L, D₁… из табл. 21.3.1», проверьте серые поля — ОК.\n\n"
+		L"2. Пункты 2) и 3): полумуфты. В каждом окне кнопка «Строка из таблицы ГОСТ под этот вал».\n\n"
+		L"3. Пункт 4): звёздочка — «Из таблицы звезды ГОСТ» подбирает D, d, H, число лучей.\n\n"
+		L"4. По желанию: «Подставить ГОСТ во все узлы» — обновит всё разом после смены момента или валов.\n\n"
+		L"5. Слева в дереве клик — превью справа; двойной клик — те же параметры.\n\n"
+		L"6. Меню «КОМПАС-3D: построить муфту» или конец списка «Задание» — создать детали в КОМПАСе "
+		L"и показать текстовую сводку (или отчёт, если КОМПАС не запущен).\n\n"
+		L"Сохраняйте документ Файл → Сохранить, чтобы не потерять параметры.";
+	AfxMessageBox(kHelp, MB_OK | MB_ICONINFORMATION);
 }
 
 #ifdef _DEBUG

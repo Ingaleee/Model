@@ -95,6 +95,8 @@ BEGIN
 END
 POPUP "&Справка"
 BEGIN
+  MENUITEM "Порядок работы для задания…",        ID_HELP_WORKFLOW
+  MENUITEM SEPARATOR
   MENUITEM "&О программе CouplingAssembly1...", ID_APP_ABOUT
 END
 END
@@ -117,106 +119,113 @@ VK_F6,          ID_NEXT_PANE,           VIRTKEY
 VK_F6,          ID_PREV_PANE,           VIRTKEY, SHIFT
 END
 
-IDD_ABOUTBOX DIALOGEX 0, 0, 170, 62
+IDD_ABOUTBOX DIALOGEX 0, 0, 260, 88
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "О программе CouplingAssembly1"
+CAPTION "О программе"
 FONT 8, "MS Shell Dlg", 0, 0, 0x1
 BEGIN
 ICON            IDR_MAINFRAME,IDC_STATIC,14,14,21,20
-LTEXT           "CouplingAssembly1, версия 1.0",IDC_STATIC,42,14,114,8,SS_NOPREFIX
-LTEXT           "(С) 2026 г.",IDC_STATIC,42,26,114,8
-DEFPUSHBUTTON   "ОК",IDOK,113,41,50,14,WS_GROUP
+LTEXT           "Муфта зубчато-звёздочная — учебный проект по ГОСТ 14084-76.",IDC_STATIC,42,14,200,18,SS_NOPREFIX
+LTEXT           "Параметры → превью → построение в КОМПАС-3D. Версия 1.0.",IDC_STATIC,42,34,200,18,SS_NOPREFIX
+LTEXT           "(С) 2026 г.",IDC_STATIC,42,54,200,8
+DEFPUSHBUTTON   "ОК",IDOK,198,67,50,14,WS_GROUP
 END
-IDD_ASSEMBLY_PARAMS_DLG DIALOGEX 0, 0, 320, 248
+IDD_ASSEMBLY_PARAMS_DLG DIALOGEX 0, 0, 320, 306
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "Параметры сборки"
+CAPTION "Шаг 1 из 4 — параметры сборки"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
-DEFPUSHBUTTON   "ОК",IDOK,209,227,50,14
-PUSHBUTTON      "Отмена",IDCANCEL,263,227,50,14
-LTEXT           "Момент, Н·м",IDC_STATIC,14,22,95,8
-EDITTEXT        IDC_EDIT_ASSEMBLY_TORQUE,115,20,56,14,ES_AUTOHSCROLL
-LTEXT           "Исполнение (1 или 2)",IDC_STATIC,14,44,95,8
-EDITTEXT        IDC_EDIT_ASSEMBLY_EXECUTION,115,42,56,14,ES_AUTOHSCROLL
-LTEXT           "Диаметр вала 1, мм",IDC_STATIC,14,66,95,8
-EDITTEXT        IDC_EDIT_ASSEMBLY_SHAFT1,115,64,56,14,ES_AUTOHSCROLL
-LTEXT           "Диаметр вала 2, мм",IDC_STATIC,14,88,95,8
-EDITTEXT        IDC_EDIT_ASSEMBLY_SHAFT2,115,86,56,14,ES_AUTOHSCROLL
-PUSHBUTTON      "По ГОСТ (табл. 21.3.1)",IDC_BTN_ASM_FROM_GOST,14,110,130,14
-LTEXT           "L, мм (расчёт)",IDC_STATIC,14,132,95,8
-EDITTEXT        IDC_EDIT_ASM_DER_L,115,130,56,14,ES_AUTOHSCROLL | ES_READONLY
-LTEXT           "D1, мм",IDC_STATIC,14,152,95,8
-EDITTEXT        IDC_EDIT_ASM_DER_D1,115,150,56,14,ES_AUTOHSCROLL | ES_READONLY
-LTEXT           "n max, об/мин",IDC_STATIC,14,174,95,8
-EDITTEXT        IDC_EDIT_ASM_DER_NMAX,115,172,56,14,ES_AUTOHSCROLL | ES_READONLY
-LTEXT           "m, кг",IDC_STATIC,190,132,40,8
-EDITTEXT        IDC_EDIT_ASM_DER_MASS,235,130,56,14,ES_AUTOHSCROLL | ES_READONLY
-LTEXT           "b1, мм",IDC_STATIC,190,152,40,8
-EDITTEXT        IDC_EDIT_ASM_DER_B1,235,150,56,14,ES_AUTOHSCROLL | ES_READONLY
-LTEXT           "Поля L, D1, n_max, m, b1 заполняются по ГОСТ; ввод в полях выше.",IDC_STATIC,14,198,290,16
+DEFPUSHBUTTON   "ОК — сохранить и дальше",IDOK,175,285,84,14
+PUSHBUTTON      "Отмена",IDCANCEL,263,285,50,14
+LTEXT           "Начните отсюда: введите значения слева, затем кнопку подстановки из ГОСТ, проверьте серые поля — ОК. Дальше — пункты 2…4 в меню «Задание».",IDC_STATIC,14,8,290,26
+LTEXT           "Момент Мкр, Н·м",IDC_STATIC,14,40,95,8
+EDITTEXT        IDC_EDIT_ASSEMBLY_TORQUE,115,38,56,14,ES_AUTOHSCROLL
+LTEXT           "Исполнение ГОСТ и число лучей задаются только номером варианта (см. ниже): 2 и 5 → исп.1, 4 луча; 1,3,4,6,7,8 → исп.2, 6 лучей.",IDC_STATIC,14,56,290,22
+LTEXT           "Исполнение (только чтение, от варианта)",IDC_STATIC,14,82,170,8
+EDITTEXT        IDC_EDIT_ASSEMBLY_EXECUTION,115,80,56,14,ES_AUTOHSCROLL | ES_READONLY
+LTEXT           "Диаметр вала 1, мм → полумуфта 1",IDC_STATIC,14,104,170,8
+EDITTEXT        IDC_EDIT_ASSEMBLY_SHAFT1,115,102,56,14,ES_AUTOHSCROLL
+LTEXT           "Диаметр вала 2, мм → полумуфта 2",IDC_STATIC,14,126,170,8
+EDITTEXT        IDC_EDIT_ASSEMBLY_SHAFT2,115,124,56,14,ES_AUTOHSCROLL
+LTEXT           "Вариант задания 1…8 (от него — исполнение и 4 или 6 лучей)",IDC_STATIC,14,148,200,8
+EDITTEXT        IDC_EDIT_ASSEMBLY_VARIANT,115,146,56,14,ES_AUTOHSCROLL
+PUSHBUTTON      "Подставить L, D₁, n, m, b₁ из табл. 21.3.1",IDC_BTN_ASM_FROM_GOST,14,166,200,14
+LTEXT           "L, мм (из ГОСТ)",IDC_STATIC,14,190,95,8
+EDITTEXT        IDC_EDIT_ASM_DER_L,115,188,56,14,ES_AUTOHSCROLL | ES_READONLY
+LTEXT           "D₁, мм",IDC_STATIC,14,212,95,8
+EDITTEXT        IDC_EDIT_ASM_DER_D1,115,210,56,14,ES_AUTOHSCROLL | ES_READONLY
+LTEXT           "n max, об/мин",IDC_STATIC,14,234,95,8
+EDITTEXT        IDC_EDIT_ASM_DER_NMAX,115,232,56,14,ES_AUTOHSCROLL | ES_READONLY
+LTEXT           "m, кг",IDC_STATIC,190,190,40,8
+EDITTEXT        IDC_EDIT_ASM_DER_MASS,235,188,56,14,ES_AUTOHSCROLL | ES_READONLY
+LTEXT           "b₁, мм",IDC_STATIC,190,212,40,8
+EDITTEXT        IDC_EDIT_ASM_DER_B1,235,210,56,14,ES_AUTOHSCROLL | ES_READONLY
+LTEXT           "Полумуфты 1 и 2 — две отдельные детали под два вала. Число губок совпадает с исполнением (2 или 3).",IDC_STATIC,14,254,290,22
 END
 
-IDD_HALFCOUPLING_PARAMS_DLG DIALOGEX 0, 0, 420, 318
+IDD_HALFCOUPLING_PARAMS_DLG DIALOGEX 0, 0, 420, 338
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "Параметры полумуфты"
+CAPTION "Шаг 2 или 3 — полумуфта"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
-DEFPUSHBUTTON   "ОК",IDOK,309,297,50,14
-PUSHBUTTON      "Отмена",IDCANCEL,363,297,50,14
-PUSHBUTTON      "По ГОСТ",IDC_BTN_HALF_FROM_GOST,14,297,110,14
-LTEXT           "d отверстия, мм",IDC_STATIC,14,22,78,8
-EDITTEXT        IDC_EDIT_HALF_BORE,95,20,52,14,ES_AUTOHSCROLL
-LTEXT           "D, мм",IDC_STATIC,14,42,78,8
-EDITTEXT        IDC_EDIT_HALF_OUTER,95,40,52,14,ES_AUTOHSCROLL
-LTEXT           "L1, мм",IDC_STATIC,14,62,78,8
-EDITTEXT        IDC_EDIT_HALF_L1,95,60,52,14,ES_AUTOHSCROLL
-LTEXT           "l ступицы, мм",IDC_STATIC,14,82,78,8
-EDITTEXT        IDC_EDIT_HALF_LHUB,95,80,52,14,ES_AUTOHSCROLL
-LTEXT           "d1, мм",IDC_STATIC,14,102,78,8
-EDITTEXT        IDC_EDIT_HALF_D1,95,100,52,14,ES_AUTOHSCROLL
-LTEXT           "b шпонки, мм",IDC_STATIC,14,122,78,8
-EDITTEXT        IDC_EDIT_HALF_KEY_B,95,120,52,14,ES_AUTOHSCROLL
-LTEXT           "d+t1, мм",IDC_STATIC,14,142,78,8
-EDITTEXT        IDC_EDIT_HALF_DT1,95,140,52,14,ES_AUTOHSCROLL
-LTEXT           "l2, мм",IDC_STATIC,220,22,70,8
-EDITTEXT        IDC_EDIT_HALF_L2,295,20,52,14,ES_AUTOHSCROLL
-LTEXT           "l3, мм",IDC_STATIC,220,42,70,8
-EDITTEXT        IDC_EDIT_HALF_L3,295,40,52,14,ES_AUTOHSCROLL
-LTEXT           "B паза, мм",IDC_STATIC,220,62,70,8
-EDITTEXT        IDC_EDIT_HALF_FACE_B,295,60,52,14,ES_AUTOHSCROLL
-LTEXT           "B1, мм",IDC_STATIC,220,82,70,8
-EDITTEXT        IDC_EDIT_HALF_FACE_B1,295,80,52,14,ES_AUTOHSCROLL
-LTEXT           "r, мм",IDC_STATIC,220,102,70,8
-EDITTEXT        IDC_EDIT_HALF_R,295,100,52,14,ES_AUTOHSCROLL
-LTEXT           "Губок, шт.",IDC_STATIC,220,122,70,8
-EDITTEXT        IDC_EDIT_HALF_LUGS,295,120,52,14,ES_AUTOHSCROLL
-LTEXT           "Табл. №",IDC_STATIC,220,142,70,8
-EDITTEXT        IDC_EDIT_HALF_TABLEID,295,140,52,14,ES_AUTOHSCROLL | ES_READONLY
-LTEXT           "L1 не меньше длины ступицы l; D больше d с зазором; d1 больше d для ступицы.",IDC_STATIC,14,168,390,18
+DEFPUSHBUTTON   "ОК — сохранить",IDOK,309,317,50,14
+PUSHBUTTON      "Отмена",IDCANCEL,363,317,50,14
+PUSHBUTTON      "Строка из таблицы ГОСТ под этот вал",IDC_BTN_HALF_FROM_GOST,14,317,200,14
+LTEXT           "Двойной клик по «Полумуфта» в дереве открывает это же окно. Кнопка снизу подставляет размеры из табл. 1 или 2.",IDC_STATIC,14,8,390,18
+LTEXT           "d отверстия под вал, мм",IDC_STATIC,14,34,120,8
+EDITTEXT        IDC_EDIT_HALF_BORE,95,32,52,14,ES_AUTOHSCROLL
+LTEXT           "D наружный, мм",IDC_STATIC,14,54,120,8
+EDITTEXT        IDC_EDIT_HALF_OUTER,95,52,52,14,ES_AUTOHSCROLL
+LTEXT           "L₁ общая длина, мм",IDC_STATIC,14,74,120,8
+EDITTEXT        IDC_EDIT_HALF_L1,95,72,52,14,ES_AUTOHSCROLL
+LTEXT           "l длина ступицы, мм",IDC_STATIC,14,94,120,8
+EDITTEXT        IDC_EDIT_HALF_LHUB,95,92,52,14,ES_AUTOHSCROLL
+LTEXT           "d₁ ступица наружу, мм",IDC_STATIC,14,114,120,8
+EDITTEXT        IDC_EDIT_HALF_D1,95,112,52,14,ES_AUTOHSCROLL
+LTEXT           "b шпонки, мм",IDC_STATIC,14,134,120,8
+EDITTEXT        IDC_EDIT_HALF_KEY_B,95,132,52,14,ES_AUTOHSCROLL
+LTEXT           "d+t₁ шпонка, мм",IDC_STATIC,14,154,120,8
+EDITTEXT        IDC_EDIT_HALF_DT1,95,152,52,14,ES_AUTOHSCROLL
+LTEXT           "l₂, мм",IDC_STATIC,220,34,70,8
+EDITTEXT        IDC_EDIT_HALF_L2,295,32,52,14,ES_AUTOHSCROLL
+LTEXT           "l₃, мм",IDC_STATIC,220,54,70,8
+EDITTEXT        IDC_EDIT_HALF_L3,295,52,52,14,ES_AUTOHSCROLL
+LTEXT           "B ширина паза под луч, мм",IDC_STATIC,220,74,115,8
+EDITTEXT        IDC_EDIT_HALF_FACE_B,295,72,52,14,ES_AUTOHSCROLL
+LTEXT           "B₁, мм",IDC_STATIC,220,94,70,8
+EDITTEXT        IDC_EDIT_HALF_FACE_B1,295,92,52,14,ES_AUTOHSCROLL
+LTEXT           "r скругления, мм",IDC_STATIC,220,114,115,8
+EDITTEXT        IDC_EDIT_HALF_R,295,112,52,14,ES_AUTOHSCROLL
+LTEXT           "Губок (только чтение: от варианта, 2 или 3)",IDC_STATIC,220,134,180,8
+EDITTEXT        IDC_EDIT_HALF_LUGS,295,132,52,14,ES_AUTOHSCROLL
+LTEXT           "Таблица ГОСТ №",IDC_STATIC,220,154,115,8
+EDITTEXT        IDC_EDIT_HALF_TABLEID,295,152,52,14,ES_AUTOHSCROLL | ES_READONLY
+LTEXT           "Проверка: L₁ ≥ l; D > d; d₁ > d. Число губок должно совпадать со звездой (исп.1 → 2, исп.2 → 3).",IDC_STATIC,14,180,390,22
 END
-IDD_SPIDER_PARAMS_DLG DIALOGEX 0, 0, 320, 248
+IDD_SPIDER_PARAMS_DLG DIALOGEX 0, 0, 320, 268
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "Параметры звёздочки"
+CAPTION "Шаг 4 из 4 — звёздочка"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
-DEFPUSHBUTTON   "ОК",IDOK,209,227,50,14
-PUSHBUTTON      "Отмена",IDCANCEL,263,227,50,14
-PUSHBUTTON      "Подобрать по ГОСТ",IDC_BTN_SPIDER_FROM_GOST,14,227,110,14
-LTEXT           "D наружн., мм",IDC_STATIC,14,22,95,8
-EDITTEXT        IDC_EDIT_SPIDER_OUTER,115,20,56,14,ES_AUTOHSCROLL
-LTEXT           "d внутр., мм",IDC_STATIC,14,44,95,8
-EDITTEXT        IDC_EDIT_SPIDER_INNER,115,42,56,14,ES_AUTOHSCROLL
-LTEXT           "H толщина, мм",IDC_STATIC,14,66,95,8
-EDITTEXT        IDC_EDIT_SPIDER_THICKNESS,115,64,56,14,ES_AUTOHSCROLL
-LTEXT           "B луча, мм",IDC_STATIC,14,88,95,8
-EDITTEXT        IDC_EDIT_SPIDER_LEG,115,86,56,14,ES_AUTOHSCROLL
-LTEXT           "Число лучей",IDC_STATIC,14,110,95,8
-EDITTEXT        IDC_EDIT_SPIDER_RAYS,115,108,56,14,ES_AUTOHSCROLL
-LTEXT           "r скругл., мм",IDC_STATIC,14,132,95,8
-EDITTEXT        IDC_EDIT_SPIDER_FILLET,115,130,56,14,ES_AUTOHSCROLL
-LTEXT           "m масса, кг",IDC_STATIC,14,154,95,8
-EDITTEXT        IDC_EDIT_SPIDER_MASS,115,152,56,14,ES_AUTOHSCROLL
-LTEXT           "Исп.1 — 4 луча, исп.2 — 6 (по ГОСТ).",IDC_STATIC,14,180,280,8
+DEFPUSHBUTTON   "ОК — сохранить",IDOK,175,247,84,14
+PUSHBUTTON      "Отмена",IDCANCEL,263,247,50,14
+PUSHBUTTON      "Из таблицы звезды ГОСТ",IDC_BTN_SPIDER_FROM_GOST,14,247,155,14
+LTEXT           "Последний шаг ввода: число лучей обычно 4 (исп.1) или 6 (исп.2). Затем меню «КОМПАС-3D: построить муфту».",IDC_STATIC,14,8,290,22
+LTEXT           "D наружный, мм",IDC_STATIC,14,36,95,8
+EDITTEXT        IDC_EDIT_SPIDER_OUTER,115,34,56,14,ES_AUTOHSCROLL
+LTEXT           "d внутренний, мм",IDC_STATIC,14,58,95,8
+EDITTEXT        IDC_EDIT_SPIDER_INNER,115,56,56,14,ES_AUTOHSCROLL
+LTEXT           "H толщина, мм",IDC_STATIC,14,80,95,8
+EDITTEXT        IDC_EDIT_SPIDER_THICKNESS,115,78,56,14,ES_AUTOHSCROLL
+LTEXT           "B ширина луча, мм",IDC_STATIC,14,102,95,8
+EDITTEXT        IDC_EDIT_SPIDER_LEG,115,100,56,14,ES_AUTOHSCROLL
+LTEXT           "Число лучей (только чтение: от варианта 2,5→4, иначе→6)",IDC_STATIC,14,124,200,8
+EDITTEXT        IDC_EDIT_SPIDER_RAYS,115,122,56,14,ES_AUTOHSCROLL
+LTEXT           "r скруглений луча и впадин, мм",IDC_STATIC,14,146,130,8
+EDITTEXT        IDC_EDIT_SPIDER_FILLET,115,144,56,14,ES_AUTOHSCROLL
+LTEXT           "m масса, кг (справочно)",IDC_STATIC,14,168,130,8
+EDITTEXT        IDC_EDIT_SPIDER_MASS,115,166,56,14,ES_AUTOHSCROLL
+LTEXT           "В КОМПАСе у 4- и 6-лучевой звезды во впадинах строится радиус; наружные углы луча — прямые под 90° (4 л.) или дуга по D (6 л.).",IDC_STATIC,14,190,290,28
 END
 
 VS_VERSION_INFO VERSIONINFO
@@ -264,24 +273,24 @@ BEGIN
 END
 IDD_ASSEMBLY_PARAMS_DLG, DIALOG
 BEGIN
-  LEFTMARGIN, 7
-  RIGHTMARGIN, 313
-  TOPMARGIN, 7
-  BOTTOMMARGIN, 241
+    LEFTMARGIN, 7
+    RIGHTMARGIN, 313
+    TOPMARGIN, 7
+    BOTTOMMARGIN, 299
 END
 IDD_HALFCOUPLING_PARAMS_DLG, DIALOG
 BEGIN
-  LEFTMARGIN, 7
-  RIGHTMARGIN, 413
-  TOPMARGIN, 7
-  BOTTOMMARGIN, 311
+    LEFTMARGIN, 7
+    RIGHTMARGIN, 413
+    TOPMARGIN, 7
+    BOTTOMMARGIN, 331
 END
 IDD_SPIDER_PARAMS_DLG, DIALOG
 BEGIN
-  LEFTMARGIN, 7
-  RIGHTMARGIN, 313
-  TOPMARGIN, 7
-  BOTTOMMARGIN, 241
+    LEFTMARGIN, 7
+    RIGHTMARGIN, 313
+    TOPMARGIN, 7
+    BOTTOMMARGIN, 261
 END
 END
 #endif
@@ -305,12 +314,12 @@ IDP_OLE_INIT_FAILED     "Не удалось инициализировать OL
 END
 STRINGTABLE
 BEGIN
-IDR_MAINFRAME           "CouplingAssembly1\n\nCouplingAssembly1\n\n\nCouplingAssembly1.Document\nДокумент CouplingAssembly1"
+IDR_MAINFRAME           "Параметры муфты\n\nМуфта\n\n\nCouplingAssembly1.Document\nДокумент с параметрами муфты ГОСТ 14084"
 END
 STRINGTABLE
 BEGIN
-AFX_IDS_APP_TITLE       "CouplingAssembly1 — муфта"
-AFX_IDS_IDLEMESSAGE     "Готово"
+AFX_IDS_APP_TITLE       "Муфта ГОСТ 14084 — задание (параметры и КОМПАС)"
+AFX_IDS_IDLEMESSAGE     "Подсказка: меню «Задание» — шаги 1…4, затем «КОМПАС-3D». Дерево: клик — превью, двойной клик — параметры."
 END
 STRINGTABLE
 BEGIN
@@ -385,6 +394,17 @@ STRINGTABLE
 BEGIN
 ID_VIEW_TOOLBAR         "Показать или скрыть панель инструментов\nПанель инструментов"
 ID_VIEW_STATUS_BAR      "Показать или скрыть строку состояния\nСтрока состояния"
+END
+STRINGTABLE
+BEGIN
+ID_PARAMS_CURRENT       "Открыть параметры выбранного узла в дереве слева\nТекущий узел"
+ID_PARAMS_ASSEMBLY      "Шаг 1: момент, вариант 1…8 (от него исполнение и 4/6 лучей), валы\nПараметры сборки"
+ID_PARAMS_HALF1         "Шаг 2: полумуфта под первый вал\nПолумуфта 1"
+ID_PARAMS_HALF2         "Шаг 3: полумуфта под второй вал\nПолумуфта 2"
+ID_PARAMS_SPIDER        "Шаг 4: эластичная звёздочка\nЗвёздочка"
+ID_REAPPLY_GOST_ALL     "Обновить размеры по ГОСТ для сборки, обеих полумуфт и звезды\nПодставить ГОСТ везде"
+ID_BUILD_COUPLING       "Создать детали в КОМПАС-3D и показать сводку размеров\nПостроить в КОМПАС"
+ID_HELP_WORKFLOW        "Пошаговая инструкция для демонстрации задания преподавателю\nПорядок работы"
 END
 STRINGTABLE
 BEGIN
