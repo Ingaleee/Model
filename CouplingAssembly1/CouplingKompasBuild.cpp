@@ -20,24 +20,6 @@ namespace
 {
 constexpr double kPi = 3.14159265358979323846;
 
-inline double NormDeg360(double a)
-{
-	double x = std::fmod(a, 360.0);
-	if (x < 0.0)
-		x += 360.0;
-	return x;
-}
-
-inline bool DegOnCCWArc(double as, double ae, double t)
-{
-	as = NormDeg360(as);
-	ae = NormDeg360(ae);
-	t = NormDeg360(t);
-	if (as <= ae + 1e-9)
-		return t + 1e-6 >= as && t - 1e-6 <= ae;
-	return t + 1e-6 >= as || t - 1e-6 <= ae;
-}
-
 inline bool KompasSourceFileExists(LPCWSTR path)
 {
 	if (path == nullptr || path[0] == 0)
@@ -909,39 +891,22 @@ void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, doub
 {
 	if (n == 4 || n == 6)
 	{
-		double xIL[8]{}, yIL[8]{}, xOL[8]{}, yOL[8]{}, xOR[8]{}, yOR[8]{}, xIR[8]{}, yIR[8]{};
-		double omx[8]{}, omy[8]{};
-		SpiderProfile2D::Fill46RayInnerOuterPoints(n, Ro, Ri, legWidthB, xIL, yIL, xOL, yOL, xOR, yOR, xIR, yIR, omx, omy);
-
-		const double stepDeg = 360.0 / static_cast<double>(n);
-		for (int k = 0; k < n; ++k)
+		std::vector<std::pair<double, double>> pv;
+		const int outerSeg = 14;
+		const int innerRiSeg = 16;
+		SpiderProfile2D::AppendClosedContourMm(pv, n, Ro, Ri, legWidthB, outerSeg, innerRiSeg);
+		if (pv.size() < 3 || p2DDoc == nullptr)
 		{
-			const int kp1 = (k + 1) % n;
-			const double midDeg = -90.0 + static_cast<double>(k) * stepDeg;
-			const double halfB = legWidthB * 0.5;
-			const double sa = (std::min)(0.999, halfB / Ro);
-			const double deltaRad =
-				(std::min)(std::asin(sa), kPi / static_cast<double>(n));
-			const double deltaDeg = deltaRad * (180.0 / kPi);
-			const double aOut1 = midDeg - deltaDeg;
-			const double aOut2 = midDeg + deltaDeg;
-			const double valleyDeg = -90.0 + (static_cast<double>(k) + 0.5) * stepDeg;
-			const double aInnerIR = std::atan2(yIR[k], xIR[k]) * (180.0 / kPi);
-			const double aInnerIL1 = std::atan2(yIL[kp1], xIL[kp1]) * (180.0 / kPi);
-			const bool ccwHasV = DegOnCCWArc(aInnerIR, aInnerIL1, valleyDeg);
-			const bool cwHasV = DegOnCCWArc(aInnerIL1, aInnerIR, valleyDeg);
-			int innerDir = 1;
-			if (ccwHasV != cwHasV)
-				innerDir = ccwHasV ? 1 : -1;
-
-			p2DDoc->ksLineSeg(xIL[k], yIL[k], xOL[k], yOL[k], 1);
-			p2DDoc->ksArcByAngle(0.0, 0.0, Ro, aOut1, aOut2, 1, 1);
-			p2DDoc->ksLineSeg(xOR[k], yOR[k], xIR[k], yIR[k], 1);
-			p2DDoc->ksArcByAngle(0.0, 0.0, Ri, aInnerIR, aInnerIL1, innerDir, 1);
+			(void)filletR;
+			return;
+		}
+		const size_t m = pv.size();
+		for (size_t i = 0; i < m; ++i)
+		{
+			const size_t j = (i + 1) % m;
+			p2DDoc->ksLineSeg(pv[i].first, pv[i].second, pv[j].first, pv[j].second, 1);
 		}
 		(void)filletR;
-		(void)omx;
-		(void)omy;
 		return;
 	}
 

@@ -45,6 +45,7 @@ void AppendClosedContourMm(
 	double Ro,
 	double Ri,
 	double legWidthB,
-	int arcSegPerCap);
+	int arcSegPerCap,
+	int innerRiArcSegPerValley = 0);
 
 }

@@ -57,6 +57,74 @@ void AppendArc3Interior(
 		out.push_back({ux + R * std::cos(tt), uy + R * std::sin(tt)});
 	}
 }
+
+inline double NormDeg360Spider(double a)
+{
+	double x = std::fmod(a, 360.0);
+	if (x < 0.0)
+		x += 360.0;
+	return x;
+}
+
+inline bool DegOnCCWArcDegSpider(double as, double ae, double t)
+{
+	as = NormDeg360Spider(as);
+	ae = NormDeg360Spider(ae);
+	t = NormDeg360Spider(t);
+	if (as <= ae + 1e-9)
+		return t + 1e-6 >= as && t - 1e-6 <= ae;
+	return t + 1e-6 >= as || t - 1e-6 <= ae;
+}
+
+void AppendRiValleyArcSegment(
+	std::vector<std::pair<double, double>>& pts,
+	double Ri,
+	double xA,
+	double yA,
+	double xB,
+	double yB,
+	double valleyDeg,
+	int nInterior)
+{
+	if (nInterior < 1)
+	{
+		if (pts.empty() ||
+			std::hypot(xB - pts.back().first, yB - pts.back().second) > 1e-9)
+			pts.push_back({xB, yB});
+		return;
+	}
+	const double asDeg = std::atan2(yA, xA) * (180.0 / kPi);
+	const double aeDeg = std::atan2(yB, xB) * (180.0 / kPi);
+	const bool ccwHasV = DegOnCCWArcDegSpider(asDeg, aeDeg, valleyDeg);
+	const bool cwHasV = DegOnCCWArcDegSpider(aeDeg, asDeg, valleyDeg);
+	bool useCCW = true;
+	if (ccwHasV && !cwHasV)
+		useCCW = true;
+	else if (!ccwHasV && cwHasV)
+		useCCW = false;
+	else
+		useCCW = ccwHasV;
+
+	double spanDeg = useCCW ? NormDeg360Spider(aeDeg - asDeg) : NormDeg360Spider(asDeg - aeDeg);
+	if (spanDeg < 1e-4)
+		spanDeg = 360.0;
+
+	for (int i = 1; i <= nInterior; ++i)
+	{
+		const double u = static_cast<double>(i) / static_cast<double>(nInterior + 1);
+		const double angDeg =
+			useCCW ? NormDeg360Spider(asDeg + u * spanDeg) : NormDeg360Spider(asDeg - u * spanDeg);
+		const double rad = angDeg * (kPi / 180.0);
+		const double x = Ri * std::cos(rad);
+		const double y = Ri * std::sin(rad);
+		if (pts.empty() ||
+			std::hypot(x - pts.back().first, y - pts.back().second) > 1e-7)
+			pts.push_back({x, y});
+	}
+	if (pts.empty() ||
+		std::hypot(xB - pts.back().first, yB - pts.back().second) > 1e-9)
+		pts.push_back({xB, yB});
+}
 }
 
 bool ParallelFlankInnerHit(
@@ -193,7 +261,8 @@ void AppendClosedContourMm(
 	double Ro,
 	double Ri,
 	double legWidthB,
-	int arcSegPerCap)
+	int arcSegPerCap,
+	int innerRiArcSegPerValley)
 {
 	pts.clear();
 	if (n != 4 && n != 6)
@@ -203,15 +272,21 @@ void AppendClosedContourMm(
 	double omx[8]{}, omy[8]{};
 	Fill46RayInnerOuterPoints(n, Ro, Ri, legWidthB, xIL, yIL, xOL, yOL, xOR, yOR, xIR, yIR, omx, omy);
 
+	const double stepDeg = 360.0 / static_cast<double>(n);
 	pts.push_back({xIL[0], yIL[0]});
 	for (int k = 0; k < n; ++k)
 	{
 		const int kp1 = (k + 1) % n;
+		const double valleyDeg = -90.0 + (static_cast<double>(k) + 0.5) * stepDeg;
 		pts.push_back({xOL[k], yOL[k]});
 		AppendArc3Interior(pts, xOL[k], yOL[k], omx[k], omy[k], xOR[k], yOR[k], nSeg);
 		pts.push_back({xOR[k], yOR[k]});
 		pts.push_back({xIR[k], yIR[k]});
-		pts.push_back({xIL[kp1], yIL[kp1]});
+		if (innerRiArcSegPerValley > 0)
+			AppendRiValleyArcSegment(
+				pts, Ri, xIR[k], yIR[k], xIL[kp1], yIL[kp1], valleyDeg, innerRiArcSegPerValley);
+		else
+			pts.push_back({xIL[kp1], yIL[kp1]});
 	}
 	if (pts.size() > 2)
 	{
