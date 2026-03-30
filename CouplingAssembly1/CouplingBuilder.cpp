@@ -13,7 +13,9 @@ bool CCouplingBuilder::Build(const CCouplingAssembly1Doc& doc) const
 	CString kompasErr;
 	if (CouplingBuildInKompas(doc, &kompasErr))
 	{
-		CString msg = L"КОМПАС-3D: детали и сборка созданы.";
+		const CStringW spiderPath = CouplingKompasOutputDirectory() + L"Звёздочка.m3d";
+		CString msg;
+		msg.Format(L"КОМПАС: записано.\n\nОткрыть в КОМПАСе:\n%s", static_cast<LPCWSTR>(spiderPath));
 		if (!kompasErr.IsEmpty())
 		{
 			msg += L"\n\n";

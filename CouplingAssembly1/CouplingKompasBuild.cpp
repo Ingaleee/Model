@@ -887,23 +887,20 @@ void AddHalfCouplingHubEndAndJawFaceChamferCuts(
 		TryMeridianRevolveCutTriangle(pPart, R, 0.0, R - cJaw, 0.0, R, cJaw);
 }
 
-bool DrawSpiderProfile(
+void DrawSpiderProfile(
 	ksDocument2DPtr p2DDoc,
 	int n,
 	double Ro,
 	double Ri,
 	double filletR,
-	double legWidthB,
-	CString* err)
+	double legWidthB)
 {
 	if (n == 4 || n == 6)
 	{
 		if (p2DDoc == nullptr)
 		{
 			(void)filletR;
-			if (err != nullptr)
-				*err += L"\nКОМПАС: 2D-документ эскиза звезды недоступен.";
-			return false;
+			return;
 		}
 		double xIL[8]{}, yIL[8]{}, xOL[8]{}, yOL[8]{}, xOR[8]{}, yOR[8]{}, xIR[8]{}, yIR[8]{};
 		double omx[8]{}, omy[8]{};
@@ -911,85 +908,45 @@ bool DrawSpiderProfile(
 			n, Ro, Ri, legWidthB, xIL, yIL, xOL, yOL, xOR, yOR, xIR, yIR, omx, omy);
 		const double stepDeg = 360.0 / static_cast<double>(n);
 		const int style = 1;
+		auto norm360 = [](double a) {
+			double x = std::fmod(a, 360.0);
+			if (x < 0.0)
+				x += 360.0;
+			return x;
+		};
+		auto onCCWArc = [&norm360](double as, double ae, double t) {
+			as = norm360(as);
+			ae = norm360(ae);
+			t = norm360(t);
+			const double eps = 1e-4;
+			if (as <= ae + eps)
+				return t + eps >= as && t - eps <= ae;
+			return t + eps >= as || t - eps <= ae;
+		};
 		try
 		{
 			for (int k = 0; k < n; ++k)
 			{
 				const int kp1 = (k + 1) % n;
 				const double valleyDeg = -90.0 + (static_cast<double>(k) + 0.5) * stepDeg;
-				const double vr = valleyDeg * (kPi / 180.0);
-				const double vx = Ri * std::cos(vr);
-				const double vy = Ri * std::sin(vr);
-
-				if (p2DDoc->ksLineSeg(xIL[k], yIL[k], xOL[k], yOL[k], style) == 0)
-				{
-					if (err != nullptr)
-					{
-						CString m;
-						m.Format(
-							L"\nКОМПАС: ksLineSeg (лапка→наружу), сектор %d — объект не создан.",
-							k);
-						*err += m;
-					}
-					return false;
-				}
-				if (p2DDoc->ksArcBy3Points(xOL[k], yOL[k], omx[k], omy[k], xOR[k], yOR[k], style) == 0)
-				{
-					if (err != nullptr)
-					{
-						CString m;
-						m.Format(L"\nКОМПАС: ksArcBy3Points (наружная дуга), сектор %d — объект не создан.", k);
-						*err += m;
-					}
-					return false;
-				}
-				if (p2DDoc->ksLineSeg(xOR[k], yOR[k], xIR[k], yIR[k], style) == 0)
-				{
-					if (err != nullptr)
-					{
-						CString m;
-						m.Format(
-							L"\nКОМПАС: ksLineSeg (наружу→внутрь), сектор %d — объект не создан.",
-							k);
-						*err += m;
-					}
-					return false;
-				}
-				if (p2DDoc->ksArcBy3Points(xIR[k], yIR[k], vx, vy, xIL[kp1], yIL[kp1], style) == 0)
-				{
-					if (p2DDoc->ksLineSeg(xIR[k], yIR[k], xIL[kp1], yIL[kp1], style) == 0)
-					{
-						if (err != nullptr)
-						{
-							CString m;
-							m.Format(
-								L"\nКОМПАС: внутренняя дуга/хорда впадины, сектор %d — объект не создан.",
-								k);
-							*err += m;
-						}
-						return false;
-					}
-					if (err != nullptr)
-					{
-						CString m;
-						m.Format(
-							L"\nКОМПАС: ksArcBy3Points (внутренняя дуга), сектор %d — заменена отрезком "
-							L"(хорда впадины).",
-							k);
-						*err += m;
-					}
-				}
+				p2DDoc->ksLineSeg(xIL[k], yIL[k], xOL[k], yOL[k], style);
+				p2DDoc->ksArcBy3Points(xOL[k], yOL[k], omx[k], omy[k], xOR[k], yOR[k], style);
+				p2DDoc->ksLineSeg(xOR[k], yOR[k], xIR[k], yIR[k], style);
+				const double aIR = std::atan2(yIR[k], xIR[k]) * (180.0 / kPi);
+				const double aIL = std::atan2(yIL[kp1], xIL[kp1]) * (180.0 / kPi);
+				const bool ccwV = onCCWArc(aIR, aIL, valleyDeg);
+				const bool cwV = onCCWArc(aIL, aIR, valleyDeg);
+				const long dir =
+					(ccwV && !cwV) ? 1L : ((!ccwV && cwV) ? -1L : (ccwV ? 1L : -1L));
+				p2DDoc->ksArcByAngle(0.0, 0.0, Ri, aIR, aIL, dir, style);
 			}
 		}
 		catch (const _com_error&)
 		{
-			if (err != nullptr)
-				*err += L"\nКОМПАС: исключение COM при построении контура звезды.";
-			return false;
 		}
 
 		(void)filletR;
-		return true;
+		return;
 	}
 
 	const double toRad = kPi / 180.0;
@@ -1028,7 +985,6 @@ bool DrawSpiderProfile(
 		point_1[1][1] = yI;
 		p2DDoc->ksLineSeg(point_1[0][0], point_1[0][1], point_1[1][0], point_1[1][1], 1);
 	}
-	return true;
 }
 
 static void AddSpiderCylindricalBoreCut(
@@ -1134,11 +1090,8 @@ bool BuildSpiderPart(
 		}
 
 		ksDocument2DPtr p2DDoc = pSketchDef->BeginEdit();
-		const bool spiderSketchOk = DrawSpiderProfile(p2DDoc, n, Ro, Ri, rf, s.legWidth, err);
+		DrawSpiderProfile(p2DDoc, n, Ro, Ri, rf, s.legWidth);
 		pSketchDef->EndEdit();
-		if (!spiderSketchOk && err != nullptr &&
-			err->Find(L"КОМПАС: ks") < 0 && err->Find(L"исключение COM при построении контура звезды") < 0)
-			*err += L"\nКОМПАС: контур звезды в эскизе построен не полностью.";
 
 		if (err != nullptr && s.rays != 4 && s.rays != 6)
 		{
@@ -1164,6 +1117,12 @@ bool BuildSpiderPart(
 				*err +=
 					L"\nКОМПАС: выдавливание звёздочки не выполнено — в эскизе «Звезда — контур» нет "
 					L"распознанного замкнутого контура (откройте эскиз и проверьте линии).";
+		}
+		if (skOk == VARIANT_FALSE || bossOk == VARIANT_FALSE)
+		{
+			if (savePath != nullptr && savePath[0] != 0)
+				SaveActiveDoc(pDoc, savePath, err);
+			return false;
 		}
 
 		ksEntity* pBoreCutRaw = nullptr;
@@ -2272,9 +2231,7 @@ bool TryBuildAssemblyDocument(
 	}
 }
 
-}
-
-bool CouplingBuildInKompas(const CCouplingAssembly1Doc& doc, CString* err)
+bool CouplingBuildInKompas_Worker(const CCouplingAssembly1Doc& doc, CString* err)
 {
 	if (!TryConnectKompas3D(err))
 		return false;
@@ -2325,6 +2282,13 @@ bool CouplingBuildInKompas(const CCouplingAssembly1Doc& doc, CString* err)
 	return true;
 }
 
+}
+
+bool CouplingBuildInKompas(const CCouplingAssembly1Doc& doc, CString* err)
+{
+	return CouplingBuildInKompas_Worker(doc, err);
+}
+
 #else
 
 bool CouplingBuildInKompas(const CCouplingAssembly1Doc& doc, CString* err)
@@ -2340,3 +2304,13 @@ bool CouplingBuildInKompas(const CCouplingAssembly1Doc& doc, CString* err)
 }
 
 #endif
+
+CStringW CouplingKompasOutputDirectory()
+{
+	wchar_t temp[MAX_PATH]{};
+	(void)GetTempPathW(MAX_PATH, temp);
+	CStringW dir(temp);
+	dir += L"Муфта_КОМПАС\\";
+	(void)::CreateDirectoryW(dir, nullptr);
+	return dir;
+}
