@@ -458,9 +458,9 @@ void AddHalfCouplingShoulderChamferCut(
 {
 	if (R <= rHub + 0.2)
 		return;
-	double cSh = (std::min)(2.6, (std::max)(0.4, shoulderRadiusR * 0.72));
-	cSh = (std::min)(cSh, (R - rHub) * 0.5);
-	cSh = (std::min)(cSh, L_jaw * 0.42);
+	double cSh = (std::min)(3.2, (std::max)(0.5, shoulderRadiusR * 0.92));
+	cSh = (std::min)(cSh, (R - rHub) * 0.55);
+	cSh = (std::min)(cSh, L_jaw * 0.48);
 	TryMeridianRevolveCutTriangle(pPart, R, L_jaw, R - cSh, L_jaw, R, L_jaw + cSh);
 }
 
@@ -768,8 +768,11 @@ void AddRadialLugs(
 	double faceSlotB1,
 	double lengthL3mm,
 	double spiderLegWidth,
+	double* outToothHeight,
 	CString* err)
 {
+	if (outToothHeight != nullptr)
+		*outToothHeight = 0.0;
 	if (lugCount < 2 || L_jaw < 1.0)
 		return;
 
@@ -801,9 +804,9 @@ void AddRadialLugs(
 	deltaRad = (std::min)(deltaRad, maxDelta);
 
 	const double toothH = (lengthL3mm > 0.6)
-		? (std::min)(lengthL3mm, L_jaw * 0.96)
-		: (std::min)(L_jaw * 0.90, (std::max)(3.5, spiderLegWidth * 1.08));
-	if (toothH < 0.8)
+		? (std::min)((std::max)(lengthL3mm, L_jaw * 0.86), L_jaw - 0.1)
+		: (std::min)((std::max)(L_jaw * 0.95, (std::max)(3.8, spiderLegWidth * 1.04)), L_jaw - 0.1);
+	if (toothH < 0.75)
 		return;
 
 	try
@@ -856,12 +859,220 @@ void AddRadialLugs(
 		ops->Clear();
 		ops->Add(pToothBoss);
 		pCirc->Create();
+		if (outToothHeight != nullptr)
+			*outToothHeight = toothH;
 	}
 	catch (const _com_error&)
 	{
 	}
 
 	(void)err;
+}
+
+void AddHalfCouplingJawFlankFillets(
+	ksPartPtr pPart,
+	ksDocument3DPtr pDoc,
+	double toothH,
+	double rBore,
+	double R,
+	double D,
+	double d,
+	int lugCount,
+	double faceSlotB,
+	double faceSlotB1,
+	double toothRadialDepth,
+	double filletRmm,
+	CString* err)
+{
+	(void)err;
+	if (pPart == nullptr || pDoc == nullptr || lugCount < 2 || toothH < 0.65)
+		return;
+	if (filletRmm < 0.06)
+		return;
+
+	const double r = d * 0.5;
+	const double chordB = (std::max)(faceSlotB, faceSlotB1 * 0.52);
+	double depthUse = (std::max)(1.2, toothRadialDepth);
+	depthUse = (std::min)(depthUse, (R - r) * 0.85);
+	depthUse = (std::min)(depthUse, R * 0.22);
+	const double rOut = (std::min)(R + depthUse, D * 0.52);
+	double rIn = (std::max)(r + 0.55, R - depthUse);
+	rIn = (std::min)(rIn, rOut - 0.35);
+	rIn = (std::max)(rIn, r + 0.35);
+	if (rOut <= rIn + 0.12)
+		return;
+
+	const double maxDelta = (kPi / static_cast<double>(lugCount)) * 0.46;
+	double deltaRad = std::asin((std::min)(0.999, chordB / (2.0 * rOut)));
+	deltaRad = (std::min)(deltaRad, maxDelta);
+	deltaRad = (std::max)(
+		deltaRad,
+		(std::min)(11.0 * kPi / 180.0, maxDelta * 0.58));
+	deltaRad = (std::min)(deltaRad, maxDelta);
+	const double deltaDeg = deltaRad * (180.0 / kPi);
+
+	const long want = static_cast<long>(lugCount) * 2;
+	if (want < 4 || want > 48)
+		return;
+
+	std::vector<double> target(static_cast<size_t>(want));
+	for (int k = 0; k < lugCount; ++k)
+	{
+		const double c = static_cast<double>(k) * (360.0 / static_cast<double>(lugCount));
+		target[static_cast<size_t>(k) * 2] = c - deltaDeg;
+		target[static_cast<size_t>(k) * 2 + 1] = c + deltaDeg;
+	}
+
+	const double rApply = (std::min)(
+		filletRmm,
+		(std::max)(
+			0.18,
+			(std::min)(toothH * 0.26, (std::min)(4.5, (R - r) * 0.16))));
+	if (rApply < 0.12)
+		return;
+
+	try
+	{
+		pDoc->RebuildDocument();
+	}
+	catch (const _com_error&)
+	{
+	}
+
+	struct JawEdgeCand
+	{
+		ksEntityPtr ed;
+		double angDeg;
+	};
+
+	auto collect = [&](double xyTol, double zSpanF, double zLo, double zHi, double rLo, double rHi) {
+		std::vector<JawEdgeCand> out;
+		ksEntityCollectionPtr edges = pPart->EntityCollection(o3d_edge);
+		for (long i = 0; i < edges->GetCount(); ++i)
+		{
+			ksEntityPtr ed = edges->GetByIndex(i);
+			ksEdgeDefinitionPtr edef = ed->GetDefinition();
+			if (edef == nullptr)
+				continue;
+			if (edef->IsCircle() != VARIANT_FALSE)
+				continue;
+			ksVertexDefinitionPtr v1 = edef->GetVertex(true);
+			ksVertexDefinitionPtr v2 = edef->GetVertex(false);
+			if (v1 == nullptr || v2 == nullptr)
+				continue;
+			double x1, y1, z1, x2, y2, z2;
+			v1->GetPoint(&x1, &y1, &z1);
+			v2->GetPoint(&x2, &y2, &z2);
+			const double dxy = std::hypot(x2 - x1, y2 - y1);
+			if (dxy > xyTol)
+				continue;
+			const double dz = std::fabs(z2 - z1);
+			if (dz < toothH * zSpanF)
+				continue;
+			const double zm = 0.5 * (z1 + z2);
+			if (zm < zLo || zm > zHi)
+				continue;
+			const double xm = 0.5 * (x1 + x2);
+			const double ym = 0.5 * (y1 + y2);
+			const double rad = std::hypot(xm, ym);
+			if (rad < rLo || rad > rHi)
+				continue;
+			const double angDeg = std::atan2(ym, xm) * (180.0 / kPi);
+			out.push_back({ed, angDeg});
+		}
+		return out;
+	};
+
+	const double rLo = (std::max)(rBore + 0.1, rIn - 0.95);
+	const double rHi = (std::min)(rOut + 1.8, R + (rOut - R) + 2.0);
+	const double zLo = toothH * 0.08;
+	const double zHi = toothH * 0.94;
+
+	auto pickFrom = [&](const std::vector<JawEdgeCand>& cands, double a1, double a2) {
+		std::vector<ksEntityPtr> picked;
+		const size_t w = static_cast<size_t>(want);
+		if (cands.empty() || target.size() < w)
+			return picked;
+		std::vector<char> used(cands.size(), 0);
+		std::vector<ksEntityPtr> bySlot(w, nullptr);
+		for (int pass = 0; pass < 2; ++pass)
+		{
+			const double angTol = (pass == 0) ? a1 : a2;
+			for (long j = 0; j < want; ++j)
+			{
+				if (bySlot[static_cast<size_t>(j)] != nullptr)
+					continue;
+				double bestD = 1e300;
+				size_t bestI = cands.size();
+				for (size_t i = 0; i < cands.size(); ++i)
+				{
+					if (used[i])
+						continue;
+					const double dAng = SpiderAbsDiffDeg(cands[i].angDeg, target[static_cast<size_t>(j)]);
+					if (dAng < bestD)
+					{
+						bestD = dAng;
+						bestI = i;
+					}
+				}
+				if (bestI < cands.size() && bestD <= angTol)
+				{
+					used[bestI] = 1;
+					bySlot[static_cast<size_t>(j)] = cands[bestI].ed;
+				}
+			}
+		}
+		for (long j = 0; j < want; ++j)
+		{
+			if (bySlot[static_cast<size_t>(j)] != nullptr)
+				picked.push_back(bySlot[static_cast<size_t>(j)]);
+		}
+		return picked;
+	};
+
+	try
+	{
+		std::vector<ksEntityPtr> picked =
+			pickFrom(collect(0.18, 0.56, zLo, zHi, rLo, rHi), 15.0, 30.0);
+		if (static_cast<long>(picked.size()) < want)
+			picked = pickFrom(
+				collect(0.32, 0.45, zLo * 0.85, (std::min)(zHi * 1.05, toothH - 0.02), rLo - 0.55, rHi + 0.9),
+				24.0,
+				48.0);
+
+		if (static_cast<long>(picked.size()) < want)
+			return;
+
+		auto tryFillet = [&](double rad) {
+			ksEntityPtr pF = pPart->NewEntity(o3d_fillet);
+			ksFilletDefinitionPtr fd = pF->GetDefinition();
+			fd->radius = rad;
+			ksEntityCollectionPtr ar = fd->array();
+			ar->Clear();
+			for (const ksEntityPtr& ed : picked)
+				ar->Add(ed);
+			pF->Create();
+		};
+
+		double rTry = rApply;
+		for (int t = 0; t < 8; ++t)
+		{
+			try
+			{
+				tryFillet(rTry);
+				break;
+			}
+			catch (const _com_error&)
+			{
+				rTry *= 0.52;
+				if (rTry < 0.09)
+					break;
+			}
+		}
+	}
+	catch (const _com_error&)
+	{
+	}
 }
 
 void AddFaceSlotsBetweenLugs(
@@ -1089,6 +1300,7 @@ bool BuildHalfCouplingPart(
 			h.filletR,
 			keywayPlaneYawDeg);
 		const double toothDepth = (std::min)(8.5, (std::max)(2.8, spiderLegWidth * 0.62));
+		double lugToothHeight = 0.0;
 		AddRadialLugs(
 			pPart,
 			D,
@@ -1100,6 +1312,7 @@ bool BuildHalfCouplingPart(
 			h.faceSlotB1,
 			h.lengthL3,
 			spiderLegWidth,
+			&lugToothHeight,
 			err);
 
 		const double slotCut = (std::min)((std::min)(L_jaw * 0.52, 7.5), R * 0.35);
@@ -1116,6 +1329,23 @@ bool BuildHalfCouplingPart(
 		(void)gostSeriesTorqueNm;
 
 		AddHalfCouplingHubEndAndJawFaceChamferCuts(pPart, R, r, rHub, L_jaw, L1, h.gostTableId);
+
+		const double jawFilletR =
+			(h.filletR > 0.05) ? h.filletR : (std::min)(1.2, (std::max)(0.45, h.faceSlotB * 0.14));
+		AddHalfCouplingJawFlankFillets(
+			pPart,
+			pDoc,
+			lugToothHeight,
+			r,
+			R,
+			D,
+			d,
+			nLug,
+			h.faceSlotB,
+			h.faceSlotB1,
+			toothDepth,
+			jawFilletR,
+			err);
 
 		try
 		{
