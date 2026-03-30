@@ -274,7 +274,9 @@ void DrawSpiderStar(CDC* pDC, int cx, int cy, int Ro, int Ri, int nRays, double 
 	if (pts.size() < 3)
 		return;
 
-	pDC->Polygon(pts.data(), static_cast<int>(pts.size()));
+	std::vector<POINT> closed = pts;
+	closed.push_back(pts[0]);
+	pDC->Polyline(closed.data(), static_cast<int>(closed.size()));
 }
 
 void DrawSpiderPreview(CDC* pDC, const CRect& area, const SpiderParams& s)
@@ -291,11 +293,8 @@ void DrawSpiderPreview(CDC* pDC, const CRect& area, const SpiderParams& s)
 		const double ri = s.innerDiameter / s.outerDiameter;
 		const int Ri = (std::max)(static_cast<int>(Ro * ri), Ro / 4);
 		CPen pen(PS_SOLID, 2, RGB(40, 40, 120));
-		CBrush br(RGB(220, 225, 245));
 		CPen* op = pDC->SelectObject(&pen);
-		CBrush* ob = pDC->SelectObject(&br);
 		DrawSpiderStar(pDC, cx, cy, Ro, Ri, s.rays, s.filletRadius, s.legWidth, s.outerDiameter);
-		pDC->SelectObject(ob);
 		pDC->SelectObject(op);
 	}
 }
