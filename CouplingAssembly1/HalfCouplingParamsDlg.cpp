@@ -33,6 +33,8 @@ CHalfCouplingParamsDlg::CHalfCouplingParamsDlg(
 	, m_r(params.filletR)
 	, m_lugs(params.lugCount)
 	, m_tableId(params.gostTableId)
+	, m_chamferC(1.0)
+	, m_screwD(4.1)
 {
 }
 
@@ -56,6 +58,21 @@ void CHalfCouplingParamsDlg::PushToFields(const HalfCouplingParams& p)
 	m_r = p.filletR;
 	m_lugs = p.lugCount;
 	m_tableId = p.gostTableId;
+	RefreshDerivedLabels();
+}
+
+void CHalfCouplingParamsDlg::RefreshDerivedLabels()
+{
+	const int ex = GostTables::ExecutionFromCourseVariant(m_gostAssembly.courseVariant);
+	const double tSn = GostTables::SnapTorqueToSeries(m_gostAssembly.torque);
+	if (ex == 1)
+		m_kindLabel = L"Табл. 1, тип 3 (2 губки)";
+	else if (GostTables::HalfCouplingJawUsesDims11(tSn))
+		m_kindLabel = L"Табл. 2, исп. 1.1 (Мкр 2.5 / 6.3)";
+	else
+		m_kindLabel = L"Табл. 2, исп. 1.2";
+	m_chamferC = (m_tableId >= 2) ? 1.6 : 1.0;
+	m_screwD = 2.0 * GostTables::SetscrewHoleRadiusMm(tSn);
 }
 
 void CHalfCouplingParamsDlg::DoDataExchange(CDataExchange* pDX)
@@ -87,7 +104,9 @@ void CHalfCouplingParamsDlg::DoDataExchange(CDataExchange* pDX)
 	DDV_MinMaxDouble(pDX, m_r, 0.0, 20.0);
 	DDX_Text(pDX, IDC_EDIT_HALF_LUGS, m_lugs);
 	DDV_MinMaxInt(pDX, m_lugs, 2, 6);
-	DDX_Text(pDX, IDC_EDIT_HALF_TABLEID, m_tableId);
+	DDX_Control(pDX, IDC_COMBO_HALF_COURSE, m_comboCourseVariant);
+	DDX_Text(pDX, IDC_EDIT_HALF_CHAMFER_C, m_chamferC);
+	DDX_Text(pDX, IDC_EDIT_HALF_SCREW_D, m_screwD);
 }
 
 BEGIN_MESSAGE_MAP(CHalfCouplingParamsDlg, CDialogEx)
@@ -99,23 +118,43 @@ BOOL CHalfCouplingParamsDlg::OnInitDialog()
 	CDialogEx::OnInitDialog();
 	const double dShaft =
 		(m_couplingIndex == 2) ? m_gostAssembly.shaftDiameter2 : m_gostAssembly.shaftDiameter1;
-	const int ex = (m_gostAssembly.execution == 1) ? 1 : 2;
+	const int ex = GostTables::ExecutionFromCourseVariant(m_gostAssembly.courseVariant);
 	const wchar_t* starTxt =
-		(ex == 1) ? L"исп.1: 2 губки, звезда 4 луча" : L"исп.2: 3 губки, звезда 6 лучей";
+		(ex == 1) ? L"4 луча" : L"6 лучей";
+	RefreshDerivedLabels();
 	CString cap;
-	const int step = (m_couplingIndex == 1) ? 2 : 3;
 	cap.Format(
-		L"Шаг %d из 4 — полумуфта %d (вал %d), d вала %.1f мм. %s",
-		step,
+		L"Полумуфта %d — вал %d, d=%.1f мм, %s. %s",
 		m_couplingIndex,
 		m_couplingIndex,
 		dShaft,
-		starTxt);
+		starTxt,
+		static_cast<LPCWSTR>(m_kindLabel));
 	SetWindowTextW(cap);
-	m_lugs = (GostTables::ExecutionFromCourseVariant(m_gostAssembly.courseVariant) == 1) ? 2 : 3;
+	m_lugs = (ex == 1) ? 2 : 3;
 	if (CEdit* e = (CEdit*)GetDlgItem(IDC_EDIT_HALF_LUGS))
 		e->SetReadOnly(TRUE);
+	if (CEdit* e = (CEdit*)GetDlgItem(IDC_EDIT_HALF_CHAMFER_C))
+		e->SetReadOnly(TRUE);
+	const BOOL showScrewRow = (ex == 1);
+	if (CEdit* e = (CEdit*)GetDlgItem(IDC_EDIT_HALF_SCREW_D))
+	{
+		e->SetReadOnly(TRUE);
+		e->ShowWindow(showScrewRow ? SW_SHOW : SW_HIDE);
+		if (CWnd* prev = e->GetWindow(GW_HWNDPREV))
+			prev->ShowWindow(showScrewRow ? SW_SHOW : SW_HIDE);
+	}
 	UpdateData(FALSE);
+	m_comboCourseVariant.ResetContent();
+	for (int i = 1; i <= 8; ++i)
+	{
+		CString s;
+		s.Format(L"%d", i);
+		m_comboCourseVariant.AddString(s);
+	}
+	const int v = m_gostAssembly.courseVariant;
+	m_comboCourseVariant.SetCurSel((v >= 1 && v <= 8) ? (v - 1) : 0);
+	m_comboCourseVariant.EnableWindow(FALSE);
 	return TRUE;
 }
 

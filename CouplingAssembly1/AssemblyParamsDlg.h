@@ -1,5 +1,6 @@
 #pragma once
 
+#include <afxwin.h>
 #include <afxdialogex.h>
 #include "resource.h"
 #include "ModelParams.h"
@@ -23,16 +24,14 @@ protected:
 	DECLARE_MESSAGE_MAP()
 
 	void RefreshDerivedFromGost();
+	void SetupTorqueCombo();
+	void SyncTorqueFromCombo();
 	void OnAsmFromGost();
-	void SyncExecutionFromCourseVariant();
-
-	afx_msg void OnKillfocusEditAssemblyVariant();
+	afx_msg void OnCbnSelchangeAssemblyTorque();
 
 private:
 	AssemblyParams m_saved;
 	double m_torque;
-	int m_execution;
-	int m_courseVariant;
 	double m_shaft1;
 	double m_shaft2;
 	double m_derL;
@@ -40,4 +39,5 @@ private:
 	double m_derN;
 	double m_derM;
 	double m_derB1;
+	CComboBox m_comboTorqueSeries;
 };

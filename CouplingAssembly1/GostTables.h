@@ -7,9 +7,17 @@ namespace GostTables
 
 double SnapTorqueToSeries(double torqueNm);
 
+int TorqueSeriesCount();
+double TorqueSeriesValue(int indexFromZero);
+int TorqueSeriesIndexNearest(double torqueNm);
+
 int ClampExecution(int execution);
 
 int ExecutionFromCourseVariant(int courseVariant);
+
+bool HalfCouplingJawUsesDims11(double snappedTorqueNm);
+
+double SetscrewHoleRadiusMm(double seriesTorqueNm);
 
 void ApplyCourseVariantRule(
 	AssemblyParams& assembly,

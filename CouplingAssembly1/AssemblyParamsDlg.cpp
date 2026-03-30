@@ -14,8 +14,6 @@ CAssemblyParamsDlg::CAssemblyParamsDlg(const AssemblyParams& params, CWnd* pPare
 	: CDialogEx(IDD_ASSEMBLY_PARAMS_DLG, pParent)
 	, m_saved(params)
 	, m_torque(params.torque)
-	, m_execution(params.execution)
-	, m_courseVariant(params.courseVariant)
 	, m_shaft1(params.shaftDiameter1)
 	, m_shaft2(params.shaftDiameter2)
 	, m_derL(params.assemblyLengthL)
@@ -30,11 +28,33 @@ CAssemblyParamsDlg::~CAssemblyParamsDlg()
 {
 }
 
+void CAssemblyParamsDlg::SyncTorqueFromCombo()
+{
+	const int i = m_comboTorqueSeries.GetCurSel();
+	if (i >= 0)
+		m_torque = GostTables::TorqueSeriesValue(i);
+}
+
+void CAssemblyParamsDlg::SetupTorqueCombo()
+{
+	m_comboTorqueSeries.ResetContent();
+	const int n = GostTables::TorqueSeriesCount();
+	for (int i = 0; i < n; ++i)
+	{
+		CString s;
+		s.Format(L"%.1f", GostTables::TorqueSeriesValue(i));
+		m_comboTorqueSeries.AddString(s);
+	}
+	const int idx = GostTables::TorqueSeriesIndexNearest(m_torque);
+	m_comboTorqueSeries.SetCurSel(idx);
+	m_torque = GostTables::TorqueSeriesValue(idx);
+}
+
 void CAssemblyParamsDlg::RefreshDerivedFromGost()
 {
 	AssemblyParams a = m_saved;
 	a.torque = m_torque;
-	a.courseVariant = m_courseVariant;
+	a.courseVariant = m_saved.courseVariant;
 	a.execution = GostTables::ExecutionFromCourseVariant(a.courseVariant);
 	a.shaftDiameter1 = m_shaft1;
 	a.shaftDiameter2 = m_shaft2;
@@ -49,11 +69,7 @@ void CAssemblyParamsDlg::RefreshDerivedFromGost()
 void CAssemblyParamsDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
-	DDX_Text(pDX, IDC_EDIT_ASSEMBLY_TORQUE, m_torque);
-	DDV_MinMaxDouble(pDX, m_torque, 0.01, 1.0e5);
-	DDX_Text(pDX, IDC_EDIT_ASSEMBLY_EXECUTION, m_execution);
-	DDX_Text(pDX, IDC_EDIT_ASSEMBLY_VARIANT, m_courseVariant);
-	DDV_MinMaxInt(pDX, m_courseVariant, 1, 8);
+	DDX_Control(pDX, IDC_COMBO_ASSEMBLY_TORQUE, m_comboTorqueSeries);
 	DDX_Text(pDX, IDC_EDIT_ASSEMBLY_SHAFT1, m_shaft1);
 	DDV_MinMaxDouble(pDX, m_shaft1, 1.0, 500.0);
 	DDX_Text(pDX, IDC_EDIT_ASSEMBLY_SHAFT2, m_shaft2);
@@ -67,29 +83,24 @@ void CAssemblyParamsDlg::DoDataExchange(CDataExchange* pDX)
 
 BEGIN_MESSAGE_MAP(CAssemblyParamsDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BTN_ASM_FROM_GOST, &CAssemblyParamsDlg::OnAsmFromGost)
-	ON_EN_KILLFOCUS(IDC_EDIT_ASSEMBLY_VARIANT, &CAssemblyParamsDlg::OnKillfocusEditAssemblyVariant)
+	ON_CBN_SELCHANGE(IDC_COMBO_ASSEMBLY_TORQUE, &CAssemblyParamsDlg::OnCbnSelchangeAssemblyTorque)
 END_MESSAGE_MAP()
 
 BOOL CAssemblyParamsDlg::OnInitDialog()
 {
 	CDialogEx::OnInitDialog();
 	SetWindowTextW(L"Шаг 1 из 4 — сборка (табл. 21.3.1 ГОСТ 2131)");
-	SyncExecutionFromCourseVariant();
+	RefreshDerivedFromGost();
+	UpdateData(FALSE);
+	SetupTorqueCombo();
 	RefreshDerivedFromGost();
 	UpdateData(FALSE);
 	return TRUE;
 }
 
-void CAssemblyParamsDlg::SyncExecutionFromCourseVariant()
+void CAssemblyParamsDlg::OnCbnSelchangeAssemblyTorque()
 {
-	m_execution = GostTables::ExecutionFromCourseVariant(m_courseVariant);
-}
-
-void CAssemblyParamsDlg::OnKillfocusEditAssemblyVariant()
-{
-	if (!UpdateData(TRUE))
-		return;
-	SyncExecutionFromCourseVariant();
+	SyncTorqueFromCombo();
 	RefreshDerivedFromGost();
 	UpdateData(FALSE);
 }
@@ -98,16 +109,23 @@ void CAssemblyParamsDlg::OnAsmFromGost()
 {
 	if (!UpdateData(TRUE))
 		return;
-	SyncExecutionFromCourseVariant();
+	SyncTorqueFromCombo();
 	RefreshDerivedFromGost();
 	UpdateData(FALSE);
 }
 
 AssemblyParams CAssemblyParamsDlg::GetParams() const
 {
+	double torqueUse = m_torque;
+	if (m_comboTorqueSeries.GetSafeHwnd() != nullptr)
+	{
+		const int i = m_comboTorqueSeries.GetCurSel();
+		if (i >= 0)
+			torqueUse = GostTables::TorqueSeriesValue(i);
+	}
 	AssemblyParams p = m_saved;
-	p.torque = m_torque;
-	p.courseVariant = m_courseVariant;
+	p.torque = torqueUse;
+	p.courseVariant = m_saved.courseVariant;
 	p.execution = GostTables::ExecutionFromCourseVariant(p.courseVariant);
 	p.shaftDiameter1 = m_shaft1;
 	p.shaftDiameter2 = m_shaft2;

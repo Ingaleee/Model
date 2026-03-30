@@ -6,9 +6,13 @@
 #include <cmath>
 #include <cstdlib>
 
-namespace GostTables
-{
 namespace
+{
+constexpr double kTorqueSeriesNm[] = {2.5, 6.3, 16.0, 25.0, 31.5, 63.0, 125.0, 250.0, 400.0};
+constexpr int kTorqueSeriesNmCount = static_cast<int>(sizeof(kTorqueSeriesNm) / sizeof(kTorqueSeriesNm[0]));
+}
+
+namespace GostTables
 {
 
 struct Asm2131Row
@@ -234,7 +238,7 @@ const SpiderRow* FindSpider6(double mkp)
 	return best;
 }
 
-void FillHalfFromRow(HalfCouplingParams& h, const HalfFullRow& r, int execution)
+void FillHalfFromRow(HalfCouplingParams& h, const HalfFullRow& r, double snappedTorqueNm)
 {
 	h.gostTableId = r.tableId;
 	h.boreDiameter = r.d;
@@ -248,7 +252,8 @@ void FillHalfFromRow(HalfCouplingParams& h, const HalfFullRow& r, int execution)
 	h.filletR = r.r;
 	h.shoulderRadiusR = (r.tableId == 1) ? 1.0 : 2.0;
 
-	if (execution == 1)
+	const bool useE1 = (r.tableId == 1) ? true : HalfCouplingJawUsesDims11(snappedTorqueNm);
+	if (useE1)
 	{
 		h.keywayDt1 = r.dt1_e1;
 		h.lengthHubL = r.l_e1;
@@ -276,15 +281,13 @@ void FillSpiderFromRow(SpiderParams& s, const SpiderRow& r)
 	s.rays = r.rays;
 }
 
-}
-
 double SnapTorqueToSeries(double torqueNm)
 {
-	constexpr double kSeries[] = {2.5, 6.3, 16.0, 25.0, 31.5, 63.0, 125.0, 250.0, 400.0};
-	double best = kSeries[0];
-	double bestDiff = std::abs(torqueNm - kSeries[0]);
-	for (double t : kSeries)
+	double best = kTorqueSeriesNm[0];
+	double bestDiff = std::abs(torqueNm - kTorqueSeriesNm[0]);
+	for (int i = 0; i < kTorqueSeriesNmCount; ++i)
 	{
+		const double t = kTorqueSeriesNm[i];
 		const double d = std::abs(torqueNm - t);
 		if (d < bestDiff)
 		{
@@ -293,6 +296,29 @@ double SnapTorqueToSeries(double torqueNm)
 		}
 	}
 	return best;
+}
+
+int TorqueSeriesCount()
+{
+	return kTorqueSeriesNmCount;
+}
+
+double TorqueSeriesValue(int indexFromZero)
+{
+	if (indexFromZero < 0 || indexFromZero >= kTorqueSeriesNmCount)
+		return kTorqueSeriesNm[0];
+	return kTorqueSeriesNm[indexFromZero];
+}
+
+int TorqueSeriesIndexNearest(double torqueNm)
+{
+	const double b = SnapTorqueToSeries(torqueNm);
+	for (int i = 0; i < kTorqueSeriesNmCount; ++i)
+	{
+		if (std::abs(kTorqueSeriesNm[i] - b) < 1e-9)
+			return i;
+	}
+	return 0;
 }
 
 int ClampExecution(int execution)
@@ -306,9 +332,24 @@ int ClampExecution(int execution)
 
 int ExecutionFromCourseVariant(int courseVariant)
 {
-	if (courseVariant == 2 || courseVariant == 5)
+	if (courseVariant <= 2)
 		return 1;
 	return 2;
+}
+
+bool HalfCouplingJawUsesDims11(double snappedTorqueNm)
+{
+	const double t = snappedTorqueNm;
+	return std::abs(t - 2.5) < 0.05 || std::abs(t - 6.3) < 0.05;
+}
+
+double SetscrewHoleRadiusMm(double seriesTorqueNm)
+{
+	if (seriesTorqueNm <= 31.5 + 1e-9)
+		return 2.05;
+	if (seriesTorqueNm <= 125.0 + 1e-9)
+		return 2.55;
+	return 3.15;
 }
 
 void ApplyCourseVariantRule(
@@ -349,11 +390,13 @@ bool LookupHalfFromGost(const AssemblyParams& assembly, HalfCouplingParams& half
 	const double t = SnapTorqueToSeries(assembly.torque);
 	const int exec = ClampExecution(assembly.execution);
 	const HalfFullRow* h = FindHalfRow(t, exec, shaftDiameterMm);
+	if (h == nullptr && exec == 2 && t <= 6.3 + 1e-9)
+		h = FindHalfRow(16.0, exec, shaftDiameterMm);
 	if (h == nullptr && exec == 1)
 		h = FindHalfRow(t, 2, shaftDiameterMm);
 	if (h == nullptr)
 		return false;
-	FillHalfFromRow(half, *h, exec);
+	FillHalfFromRow(half, *h, t);
 	return true;
 }
 

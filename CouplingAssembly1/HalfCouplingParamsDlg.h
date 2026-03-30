@@ -1,5 +1,6 @@
 #pragma once
 
+#include <afxwin.h>
 #include <afxdialogex.h>
 #include "resource.h"
 #include "ModelParams.h"
@@ -27,6 +28,7 @@ protected:
 	DECLARE_MESSAGE_MAP()
 
 	void PushToFields(const HalfCouplingParams& p);
+	void RefreshDerivedLabels();
 	void OnHalfFromGost();
 	void OnOK() override;
 
@@ -49,4 +51,8 @@ private:
 	double m_r;
 	int m_lugs;
 	int m_tableId;
+	CString m_kindLabel;
+	double m_chamferC;
+	double m_screwD;
+	CComboBox m_comboCourseVariant;
 };

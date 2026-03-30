@@ -5,11 +5,9 @@
 #define IDD_ASSEMBLY_PARAMS_DLG         310
 #define IDD_HALFCOUPLING_PARAMS_DLG     312
 #define IDD_SPIDER_PARAMS_DLG           314
-#define IDC_EDIT_ASSEMBLY_TORQUE        1001
-#define IDC_EDIT_ASSEMBLY_EXECUTION     1002
+#define IDC_COMBO_ASSEMBLY_TORQUE       1056
 #define IDC_EDIT_ASSEMBLY_SHAFT1        1003
 #define IDC_EDIT_ASSEMBLY_SHAFT2        1004
-#define IDC_EDIT_ASSEMBLY_VARIANT       1051
 #define IDC_EDIT_HALF_BORE              1011
 #define IDC_EDIT_HALF_OUTER             1012
 #define IDC_EDIT_HALF_LENGTH            1013
@@ -26,6 +24,9 @@
 #define IDC_EDIT_HALF_LUGS              1027
 #define IDC_EDIT_HALF_TABLEID           1028
 #define IDC_BTN_HALF_FROM_GOST          1029
+#define IDC_COMBO_HALF_COURSE           1052
+#define IDC_EDIT_HALF_CHAMFER_C         1053
+#define IDC_EDIT_HALF_SCREW_D           1054
 #define IDC_EDIT_SPIDER_OUTER           1021
 #define IDC_EDIT_SPIDER_THICKNESS       1022
 #define IDC_EDIT_SPIDER_RAYS            1023
@@ -54,7 +55,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        316
 #define _APS_NEXT_COMMAND_VALUE         40004
-#define _APS_NEXT_CONTROL_VALUE         1052
+#define _APS_NEXT_CONTROL_VALUE         1057
 #define _APS_NEXT_SYMED_VALUE           310
 #endif
 #endif
