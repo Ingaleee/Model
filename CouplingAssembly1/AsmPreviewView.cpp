@@ -7,6 +7,7 @@
 #include "CouplingAssembly1Doc.h"
 #include "AsmPreviewView.h"
 #include "GostTables.h"
+#include "SpiderProfile2D.h"
 
 #include <cmath>
 #include <functional>
@@ -140,6 +141,21 @@ void BuildSpiderProfilePolygonPoints(
 	pts.clear();
 	if (n < 3 || Ro <= Ri + 1.0 || arcSegmentsPerCap < 2)
 		return;
+
+	if (n == 4 || n == 6)
+	{
+		std::vector<std::pair<double, double>> contour;
+		SpiderProfile2D::AppendClosedContourMm(contour, n, Ro, Ri, legWidth, arcSegmentsPerCap);
+		if (contour.size() < 3)
+			return;
+		pts.reserve(contour.size());
+		for (const auto& pr : contour)
+		{
+			pts.push_back(
+				{ cx + static_cast<LONG>(std::lround(pr.first)), cy + static_cast<LONG>(std::lround(pr.second)) });
+		}
+		return;
+	}
 
 	const double riDraw =
 		(filletR > 0.02) ? (std::max)(Ro * 0.22, Ri - (std::min)(filletR * 1.55, Ri * 0.28)) : Ri;

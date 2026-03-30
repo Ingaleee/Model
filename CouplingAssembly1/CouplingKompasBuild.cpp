@@ -3,6 +3,7 @@
 #include "CouplingAssembly1Doc.h"
 #include "GostTables.h"
 #include "KompasConnect.h"
+#include "SpiderProfile2D.h"
 
 #if COUPLING_USE_KOMPAS_SDK
 
@@ -82,13 +83,13 @@ void AddSpiderInnerCylinderFlankFillets(
 {
 	if (pPart == nullptr || pDoc == nullptr || pBoss == nullptr || nRays < 3)
 		return;
-	if (thicknessH < 0.25 || riProfile < 0.35 || filletRmm < 0.06)
+	if (thicknessH < 0.25 || riProfile < 0.35 || filletRmm < 0.015)
 		return;
 
 	const double rApply = (std::min)(
 		filletRmm,
 		(std::max)(0.08, riProfile * 0.42));
-	if (rApply < 0.06)
+	if (rApply < 0.04)
 		return;
 
 	try
@@ -117,7 +118,8 @@ void AddSpiderInnerCylinderFlankFillets(
 			ksEdgeDefinitionPtr edef = ed->GetDefinition();
 			if (edef == nullptr)
 				continue;
-			if (edef->GetOwnerEntity() != pBoss)
+			ksEntityPtr owner = edef->GetOwnerEntity();
+			if (owner != nullptr && owner != pBoss)
 				continue;
 			if (edef->IsCircle() != VARIANT_FALSE)
 				continue;
@@ -405,132 +407,6 @@ void AddHalfCouplingHubEndAndJawFaceChamferCuts(
 		TryMeridianRevolveCutTriangle(pPart, R, 0.0, R - cJaw, 0.0, R, cJaw);
 }
 
-static bool ParallelFlankInnerHit(
-	double ox,
-	double oy,
-	double dx,
-	double dy,
-	double Ri,
-	double* ix,
-	double* iy)
-{
-	const double b = 2.0 * (ox * dx + oy * dy);
-	const double c = ox * ox + oy * oy - Ri * Ri;
-	const double disc = b * b - 4.0 * c;
-	if (disc < 0.0)
-		return false;
-	const double sd = std::sqrt(disc);
-	const double s1 = (-b - sd) * 0.5;
-	const double s2 = (-b + sd) * 0.5;
-	const double Ro0 = std::hypot(ox, oy);
-	double bestS = s1;
-	double bestE = 1e300;
-	for (double s : {s1, s2})
-	{
-		const double r = std::hypot(ox + s * dx, oy + s * dy);
-		const double e = std::abs(r - Ri);
-		if (r < Ro0 - 1e-6 && e < bestE)
-		{
-			bestE = e;
-			bestS = s;
-		}
-	}
-	if (bestE > 1e200)
-	{
-		for (double s : {s1, s2})
-		{
-			const double r = std::hypot(ox + s * dx, oy + s * dy);
-			const double e = std::abs(r - Ri);
-			if (e < bestE)
-			{
-				bestE = e;
-				bestS = s;
-			}
-		}
-	}
-	*ix = ox + bestS * dx;
-	*iy = oy + bestS * dy;
-	return true;
-}
-
-static void SpiderFill46RayInnerOuterPoints(
-	int n,
-	double Ro,
-	double Ri,
-	double legWidthB,
-	double xIL[8],
-	double yIL[8],
-	double xOL[8],
-	double yOL[8],
-	double xOR[8],
-	double yOR[8],
-	double xIR[8],
-	double yIR[8],
-	double omx[8],
-	double omy[8])
-{
-	if (n != 4 && n != 6)
-		return;
-	const double toRad = kPi / 180.0;
-	const double stepDeg = 360.0 / static_cast<double>(n);
-	const double sectorHalfRad = kPi / static_cast<double>(n);
-	const double riInner = Ri;
-	for (int k = 0; k < n; ++k)
-	{
-		const double midDeg = -90.0 + static_cast<double>(k) * stepDeg;
-		const double mid = midDeg * toRad;
-		const double tx = -std::sin(mid);
-		const double ty = std::cos(mid);
-		const double halfB = legWidthB * 0.5;
-		const double sa = (std::min)(0.999, halfB / Ro);
-		const double deltaRad =
-			(std::min)(std::asin(sa), sectorHalfRad * 0.88);
-		xOL[k] = Ro * std::cos(mid - deltaRad);
-		yOL[k] = Ro * std::sin(mid - deltaRad);
-		xOR[k] = Ro * std::cos(mid + deltaRad);
-		yOR[k] = Ro * std::sin(mid + deltaRad);
-		omx[k] = Ro * std::cos(mid);
-		omy[k] = Ro * std::sin(mid);
-
-		const double inDeg = -90.0 + (static_cast<double>(k) + 0.5) * stepDeg;
-		const double prevInDeg =
-			(k == 0) ? (-90.0 + (static_cast<double>(n) - 0.5) * stepDeg)
-					 : (-90.0 + (static_cast<double>(k) - 0.5) * stepDeg);
-		const double xV0 = riInner * std::cos(prevInDeg * toRad);
-		const double yV0 = riInner * std::sin(prevInDeg * toRad);
-		const double xV1 = riInner * std::cos(inDeg * toRad);
-		const double yV1 = riInner * std::sin(inDeg * toRad);
-
-		xIL[k] = xV0;
-		yIL[k] = yV0;
-		xIR[k] = xV1;
-		yIR[k] = yV1;
-		(void)ParallelFlankInnerHit(xOL[k], yOL[k], tx, ty, riInner, &xIL[k], &yIL[k]);
-		(void)ParallelFlankInnerHit(xOR[k], yOR[k], tx, ty, riInner, &xIR[k], &yIR[k]);
-	}
-}
-
-static void SpiderFlankFilletTargetAnglesDeg(
-	int n,
-	double Ro,
-	double Ri,
-	double legWidthB,
-	double* outDeg,
-	int outCap)
-{
-	if ((n != 4 && n != 6) || outCap < 2 * n)
-		return;
-	double xIL[8]{}, yIL[8]{}, xOL[8]{}, yOL[8]{}, xOR[8]{}, yOR[8]{}, xIR[8]{}, yIR[8]{};
-	double omx[8]{}, omy[8]{};
-	SpiderFill46RayInnerOuterPoints(n, Ro, Ri, legWidthB, xIL, yIL, xOL, yOL, xOR, yOR, xIR, yIR, omx, omy);
-	int idx = 0;
-	for (int k = 0; k < n; ++k)
-	{
-		outDeg[idx++] = std::atan2(yIL[k], xIL[k]) * (180.0 / kPi);
-		outDeg[idx++] = std::atan2(yIR[k], xIR[k]) * (180.0 / kPi);
-	}
-}
-
 void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, double filletR, double legWidthB)
 {
 	const double toRad = kPi / 180.0;
@@ -542,7 +418,7 @@ void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, doub
 
 		double xIL[8]{}, yIL[8]{}, xOL[8]{}, yOL[8]{}, xOR[8]{}, yOR[8]{}, xIR[8]{}, yIR[8]{};
 		double omx[8]{}, omy[8]{};
-		SpiderFill46RayInnerOuterPoints(n, Ro, Ri, legWidthB, xIL, yIL, xOL, yOL, xOR, yOR, xIR, yIR, omx, omy);
+		SpiderProfile2D::Fill46RayInnerOuterPoints(n, Ro, Ri, legWidthB, xIL, yIL, xOL, yOL, xOR, yOR, xIR, yIR, omx, omy);
 
 		for (int k = 0; k < n; ++k)
 		{
@@ -681,7 +557,7 @@ bool BuildSpiderPart(
 		if (n == 4 || n == 6)
 		{
 			double flankAngDeg[16]{};
-			SpiderFlankFilletTargetAnglesDeg(n, Ro, Ri, s.legWidth, flankAngDeg, 16);
+			SpiderProfile2D::FlankFilletTargetAnglesDeg(n, Ro, Ri, s.legWidth, flankAngDeg, 16);
 			AddSpiderInnerCylinderFlankFillets(
 				pPart,
 				pDoc,
@@ -1352,15 +1228,8 @@ bool CouplingBuildInKompas(const CCouplingAssembly1Doc& doc, CString* err)
 
 	if (err != nullptr)
 	{
-		const CString prefix = err->IsEmpty() ? CString(L"КОМПАС-3D: построение по ГОСТ 14084-76.") : *err;
-		err->Format(
-			L"%s\r\n\r\n"
-			L"Сохранено в: %s\r\n"
-			L"— Звёздочка.m3d, Полумуфта1.m3d, Полумуфта2.m3d\r\n"
-			L"— Муфта_Сборка.a3d (в дереве: Звёздочка, Полумуфта 1, Полумуфта 2)\r\n"
-			L"Экспорт STEP/IGES: через «Сохранить как» в КОМПАСе при необходимости.",
-			static_cast<LPCWSTR>(prefix),
-			static_cast<LPCWSTR>(dir));
+		if (err->IsEmpty())
+			err->Format(L"Папка: %s", static_cast<LPCWSTR>(dir));
 	}
 
 	return true;
