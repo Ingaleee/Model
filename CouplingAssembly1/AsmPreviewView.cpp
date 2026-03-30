@@ -145,7 +145,9 @@ void BuildSpiderProfilePolygonPoints(
 	if (n == 4 || n == 6)
 	{
 		std::vector<std::pair<double, double>> contour;
-		SpiderProfile2D::AppendClosedContourMm(contour, n, Ro, Ri, legWidth, arcSegmentsPerCap);
+		const int innerRiSeg = 16;
+		SpiderProfile2D::AppendClosedContourMm(
+			contour, n, Ro, Ri, legWidth, arcSegmentsPerCap, innerRiSeg);
 		if (contour.size() < 3)
 			return;
 		pts.reserve(contour.size());

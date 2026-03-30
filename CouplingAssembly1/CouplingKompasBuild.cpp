@@ -28,36 +28,6 @@ inline bool KompasSourceFileExists(LPCWSTR path)
 	return a != INVALID_FILE_ATTRIBUTES && (a & FILE_ATTRIBUTE_DIRECTORY) == 0;
 }
 
-static void DedupeClosedPolyline(std::vector<std::pair<double, double>>& p, double eps)
-{
-	std::vector<std::pair<double, double>> q;
-	q.reserve(p.size());
-	for (const auto& v : p)
-	{
-		if (q.empty() ||
-			std::hypot(v.first - q.back().first, v.second - q.back().second) > eps)
-			q.push_back(v);
-	}
-	p.swap(q);
-	if (p.size() >= 2 &&
-		std::hypot(p.front().first - p.back().first, p.front().second - p.back().second) < eps)
-		p.pop_back();
-}
-
-static void EnsureCCWPositiveAreaXY(std::vector<std::pair<double, double>>& p)
-{
-	if (p.size() < 3)
-		return;
-	double a = 0.0;
-	for (size_t i = 0; i < p.size(); ++i)
-	{
-		const size_t j = (i + 1) % p.size();
-		a += p[i].first * p[j].second - p[j].first * p[i].second;
-	}
-	if (a < 0.0)
-		std::reverse(p.begin(), p.end());
-}
-
 inline void KsAxisLineXThroughOriginStyle3(ksDocument2DPtr p2DDoc)
 {
 	if (p2DDoc == nullptr)
@@ -921,28 +891,37 @@ void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, doub
 {
 	if (n == 4 || n == 6)
 	{
-		std::vector<std::pair<double, double>> pv;
-		const int outerSeg = 14;
-		const int innerRiSeg = 16;
-		SpiderProfile2D::AppendClosedContourMm(pv, n, Ro, Ri, legWidthB, outerSeg, innerRiSeg);
-		if (pv.size() < 3 || p2DDoc == nullptr)
+		if (p2DDoc == nullptr)
 		{
 			(void)filletR;
 			return;
 		}
-		DedupeClosedPolyline(pv, 1e-8);
-		EnsureCCWPositiveAreaXY(pv);
-		if (pv.size() < 3)
+		double xIL[8]{}, yIL[8]{}, xOL[8]{}, yOL[8]{}, xOR[8]{}, yOR[8]{}, xIR[8]{}, yIR[8]{};
+		double omx[8]{}, omy[8]{};
+		SpiderProfile2D::Fill46RayInnerOuterPoints(
+			n, Ro, Ri, legWidthB, xIL, yIL, xOL, yOL, xOR, yOR, xIR, yIR, omx, omy);
+		const double stepDeg = 360.0 / static_cast<double>(n);
+		const int style = 1;
+		try
 		{
-			(void)filletR;
-			return;
+			for (int k = 0; k < n; ++k)
+			{
+				const int kp1 = (k + 1) % n;
+				const double valleyDeg = -90.0 + (static_cast<double>(k) + 0.5) * stepDeg;
+				const double vr = valleyDeg * (kPi / 180.0);
+				const double vx = Ri * std::cos(vr);
+				const double vy = Ri * std::sin(vr);
+
+				p2DDoc->ksLineSeg(xIL[k], yIL[k], xOL[k], yOL[k], style);
+				p2DDoc->ksArcBy3Points(xOL[k], yOL[k], omx[k], omy[k], xOR[k], yOR[k], style);
+				p2DDoc->ksLineSeg(xOR[k], yOR[k], xIR[k], yIR[k], style);
+				p2DDoc->ksArcBy3Points(xIR[k], yIR[k], vx, vy, xIL[kp1], yIL[kp1], style);
+			}
 		}
-		const size_t m = pv.size();
-		for (size_t i = 0; i < m; ++i)
+		catch (const _com_error&)
 		{
-			const size_t j = (i + 1) % m;
-			p2DDoc->ksLineSeg(pv[i].first, pv[i].second, pv[j].first, pv[j].second, 1);
 		}
+
 		(void)filletR;
 		return;
 	}
@@ -1103,10 +1082,19 @@ bool BuildSpiderPart(
 
 		ksEntityPtr pBoss = pPart->NewEntity(o3d_bossExtrusion);
 		ksBossExtrusionDefinitionPtr pBossDef = pBoss->GetDefinition();
-		pBossDef->SetSketch(pSketch);
+		const VARIANT_BOOL skOk = pBossDef->SetSketch(pSketch);
 		pBossDef->directionType = dtNormal;
 		pBossDef->SetSideParam(TRUE, etBlind, H, 0, FALSE);
-		pBoss->Create();
+		const VARIANT_BOOL bossOk = pBoss->Create();
+		if (err != nullptr)
+		{
+			if (skOk == VARIANT_FALSE)
+				*err += L"\nКОМПАС: эскиз не привязан к выдавливанию звёздочки (SetSketch).";
+			if (bossOk == VARIANT_FALSE)
+				*err +=
+					L"\nКОМПАС: выдавливание звёздочки не выполнено — в эскизе «Звезда — контур» нет "
+					L"распознанного замкнутого контура (откройте эскиз и проверьте линии).";
+		}
 
 		ksEntity* pBoreCutRaw = nullptr;
 		AddSpiderCylindricalBoreCut(pPart, Ri, H, &pBoreCutRaw);
@@ -2253,7 +2241,10 @@ bool CouplingBuildInKompas(const CCouplingAssembly1Doc& doc, CString* err)
 	if (err != nullptr)
 	{
 		if (err->IsEmpty())
-			err->Format(L"Папка: %s", static_cast<LPCWSTR>(dir));
+			err->Format(
+				L"Папка: %s\nЗвёздочка (откройте именно этот файл): %s",
+				static_cast<LPCWSTR>(dir),
+				static_cast<LPCWSTR>(pSpider));
 	}
 
 	return true;
