@@ -302,18 +302,11 @@ void DrawSpiderPreview(CDC* pDC, const CRect& area, const SpiderParams& s)
 
 void DrawHalfSide(CDC* pDC, const CRect& area, const HalfCouplingParams& h)
 {
-	const int w = area.Width();
 	const int hgt = area.Height();
-	const int hubW = (std::max)(w / 5, 18);
-	const int jawW = w - hubW - 4;
+	(void)h;
 	CPen pen(PS_SOLID, 2, RGB(60, 60, 60));
 	CPen* op = pDC->SelectObject(&pen);
-	pDC->Rectangle(area.left, area.top + hgt / 4, area.left + hubW, area.bottom - hgt / 4);
-	pDC->Rectangle(area.left + hubW + 2, area.top + hgt / 6, area.right - 2, area.bottom - hgt / 6);
-	pDC->MoveTo(area.left + hubW, area.top + hgt / 4);
-	pDC->LineTo(area.left + hubW + 2, area.top + hgt / 6);
-	pDC->MoveTo(area.left + hubW, area.bottom - hgt / 4);
-	pDC->LineTo(area.left + hubW + 2, area.bottom - hgt / 6);
+	pDC->Rectangle(area.left + 2, area.top + hgt / 5, area.right - 2, area.bottom - hgt / 5);
 	pDC->SelectObject(op);
 }
 
@@ -330,13 +323,6 @@ void DrawAssemblyPreview(CDC* pDC, const CRect& area, const HalfCouplingParams& 
 	DrawHalfSide(pDC, right, h2);
 
 	CRect mid(cx - halfW / 2 - 2, cy - H / 3, cx + halfW / 2 + 2, cy + H / 3);
-	CPen pen(PS_SOLID, 1, RGB(100, 100, 160));
-	CPen* op = pDC->SelectObject(&pen);
-	CBrush br(RGB(230, 230, 250));
-	CBrush* ob = pDC->SelectObject(&br);
-	pDC->Rectangle(&mid);
-	pDC->SelectObject(ob);
-	pDC->SelectObject(op);
 
 	const int Ro = (std::min)(mid.Width(), mid.Height()) / 2 - 2;
 	const int Ri = (s.outerDiameter > 1.0) ? (std::max)(Ro / 4, static_cast<int>(Ro * (s.innerDiameter / s.outerDiameter))) : Ro / 3;

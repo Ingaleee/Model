@@ -1512,27 +1512,12 @@ bool BuildHalfCouplingPart(
 			zKey1,
 			keyHalfW,
 			keyDepth + 0.5,
-			h.filletR,
+			0.0,
 			0.0);
 
-		const int nLug = (std::max)(2, lugCount);
-		const double toothDepth = (std::min)(8.5, (std::max)(2.8, spiderLegWidth * 0.62));
-		AddRadialLugs(
-			pPart,
-			D,
-			d,
-			L_jaw,
-			nLug,
-			toothDepth,
-			h.faceSlotB,
-			h.faceSlotB1,
-			h.lengthL3,
-			spiderLegWidth,
-			rHub,
-			nullptr,
-			err);
-
 		(void)gostSeriesTorqueNm;
+		(void)lugCount;
+		(void)spiderLegWidth;
 
 		try
 		{
