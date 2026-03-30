@@ -747,7 +747,7 @@ void AddKeywayOnHub(
 			ksPlaneAngleDefinitionPtr pPlAngDef = pPlAng->GetDefinition();
 			pPlAngDef->SetPlane(pPlBase);
 			pPlAngDef->SetAxis(pPart->GetDefaultEntity(o3d_axisOZ));
-			pPlAngDef->SetAngle(planeRotateDegAroundZ);
+			pPlAngDef->angle = planeRotateDegAroundZ;
 			pPlAng->Create();
 			pPlKey = pPlAng;
 		}
