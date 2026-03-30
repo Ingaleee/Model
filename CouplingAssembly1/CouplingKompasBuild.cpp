@@ -520,6 +520,7 @@ void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, doub
 				p2DDoc->ksArcBy3Points(xIR[k], yIR[k], xValleyMid, yValleyMid, xIL[kp1], yIL[kp1], 1);
 			}
 		}
+		p2DDoc->ksCircle(0.0, 0.0, Ri, 1);
 		(void)filletR;
 		return;
 	}
@@ -559,6 +560,7 @@ void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, doub
 		point_1[1][1] = yI;
 		p2DDoc->ksLineSeg(point_1[0][0], point_1[0][1], point_1[1][0], point_1[1][1], 1);
 	}
+	p2DDoc->ksCircle(0.0, 0.0, riDraw, 1);
 }
 
 bool SaveActiveDoc(ksDocument3DPtr pDoc, const wchar_t* path, CString* err)
