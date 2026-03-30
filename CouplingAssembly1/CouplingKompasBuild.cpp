@@ -839,6 +839,37 @@ void AddKeywayOnHub(
 	pKeyCut->Create();
 }
 
+static bool DrawHalfCouplingTwoLugAnnulusSector(
+	ksDocument2DPtr p2,
+	double R,
+	double rInner,
+	double Bmm)
+{
+	if (p2 == nullptr || R <= rInner + 0.2 || Bmm < 0.15)
+		return false;
+	double B = Bmm;
+	B = (std::min)(B, rInner - 0.18);
+	B = (std::min)(B, R - 0.18);
+	B = (std::max)(B, 0.35);
+	if (B >= rInner - 0.12 || B >= R - 0.12)
+		return false;
+	const double ri2 = rInner * rInner - B * B;
+	const double ro2 = R * R - B * B;
+	if (ri2 <= 0.0 || ro2 <= 0.0)
+		return false;
+	const double sri = std::sqrt(ri2);
+	const double sro = std::sqrt(ro2);
+	const double ti = std::atan2(B, sri) * (180.0 / kPi);
+	const double tj = std::atan2(sri, B) * (180.0 / kPi);
+	const double ul = std::atan2(B, sro) * (180.0 / kPi);
+	const double uh = std::atan2(sro, B) * (180.0 / kPi);
+	p2->ksArcByAngle(0.0, 0.0, rInner, ti, tj, 1, 1);
+	p2->ksLineSeg(B, sri, B, sro, 1);
+	p2->ksArcByAngle(0.0, 0.0, R, ul, uh, 1, 1);
+	p2->ksLineSeg(sro, B, sri, B, 1);
+	return true;
+}
+
 void AddRadialLugs(
 	ksPartPtr pPart,
 	double D,
@@ -850,6 +881,7 @@ void AddRadialLugs(
 	double faceSlotB1,
 	double lengthL3mm,
 	double spiderLegWidth,
+	double hubOuterR,
 	double* outToothHeight,
 	CString* err)
 {
@@ -862,6 +894,59 @@ void AddRadialLugs(
 	const double r = d * 0.5;
 	if (R <= r + 0.25)
 		return;
+
+	if (lugCount == 2)
+	{
+		const double rInnerFace =
+			(std::max)(r + 0.45, (std::min)(hubOuterR, R - 0.55));
+		double Bmm = (std::max)(faceSlotB, faceSlotB1 * 0.55);
+		Bmm = (std::max)(0.8, (std::min)(Bmm, rInnerFace * 0.72));
+		const double toothH = (lengthL3mm > 0.6)
+			? (std::min)((std::max)(lengthL3mm, L_jaw * 0.86), L_jaw - 0.1)
+			: (std::min)(
+				  (std::max)(L_jaw * 0.95, (std::max)(3.8, spiderLegWidth * 1.04)),
+				  L_jaw - 0.1);
+		if (toothH < 0.75)
+			return;
+		try
+		{
+			ksEntityPtr pSkTooth = pPart->NewEntity(o3d_sketch);
+			ksSketchDefinitionPtr pSkToothDef = pSkTooth->GetDefinition();
+			pSkToothDef->SetPlane(pPart->GetDefaultEntity(o3d_planeXOY));
+			pSkTooth->Create();
+			ksDocument2DPtr p2DDoc = pSkToothDef->BeginEdit();
+			const bool drawn = DrawHalfCouplingTwoLugAnnulusSector(p2DDoc, R, rInnerFace, Bmm);
+			KsAxisLineXThroughOriginStyle3(p2DDoc);
+			pSkToothDef->EndEdit();
+			if (!drawn)
+				return;
+			ksEntityPtr pToothBoss = pPart->NewEntity(o3d_bossExtrusion);
+			ksBossExtrusionDefinitionPtr pToothDef = pToothBoss->GetDefinition();
+			pToothDef->SetSketch(pSkTooth);
+			pToothDef->directionType = dtNormal;
+			pToothDef->SetSideParam(TRUE, etBlind, toothH, 0, FALSE);
+			pToothBoss->Create();
+			ksEntityPtr pAxis = pPart->GetDefaultEntity(o3d_axisOZ);
+			ksEntityPtr pCirc = pPart->NewEntity(o3d_circularCopy);
+			ksCircularCopyDefinitionPtr pCircDef = pCirc->GetDefinition();
+			pCircDef->SetAxis(pAxis);
+			pCircDef->count1 = 1;
+			pCircDef->count2 = 2;
+			pCircDef->step1 = 180.0;
+			ksEntityCollectionPtr ops = pCircDef->GetOperationArray();
+			ops->Clear();
+			ops->Add(pToothBoss);
+			pCirc->Create();
+			if (outToothHeight != nullptr)
+				*outToothHeight = toothH;
+		}
+		catch (const _com_error&)
+		{
+		}
+		(void)err;
+		(void)toothRadialDepth;
+		return;
+	}
 
 	const double degStep = 360.0 / static_cast<double>(lugCount);
 	const double chordB = (std::max)(faceSlotB, faceSlotB1 * 0.52);
@@ -1351,8 +1436,6 @@ bool BuildHalfCouplingPart(
 
 		AddThroughAllAxisBoreCut(pPart, r);
 
-		AddHalfCouplingShoulderChamferCut(pPart, R, rHub, L_jaw, h.shoulderRadiusR);
-
 		const double keyHalfW = h.keywayWidthB * 0.5;
 		const double t1 = (std::max)(0.1, h.keywayDt1 - d);
 		const double keyDepth = (std::min)(
@@ -1384,7 +1467,6 @@ bool BuildHalfCouplingPart(
 			h.filletR,
 			keywayPlaneYawDeg);
 		const double toothDepth = (std::min)(8.5, (std::max)(2.8, spiderLegWidth * 0.62));
-		double lugToothHeight = 0.0;
 		AddRadialLugs(
 			pPart,
 			D,
@@ -1396,40 +1478,11 @@ bool BuildHalfCouplingPart(
 			h.faceSlotB1,
 			h.lengthL3,
 			spiderLegWidth,
-			&lugToothHeight,
+			rHub,
+			nullptr,
 			err);
-
-		const double slotCut = (std::min)((std::min)(L_jaw * 0.52, 7.5), R * 0.35);
-		AddFaceSlotsBetweenLugs(
-			pPart,
-			D,
-			d,
-			h.faceSlotB,
-			h.faceSlotB1,
-			slotCut,
-			nLug,
-			h.gostTableId);
 
 		(void)gostSeriesTorqueNm;
-
-		AddHalfCouplingHubEndAndJawFaceChamferCuts(pPart, R, r, rHub, L_jaw, L1, h.gostTableId);
-
-		const double jawFilletR =
-			(h.filletR > 0.05) ? h.filletR : (std::min)(1.2, (std::max)(0.45, h.faceSlotB * 0.14));
-		AddHalfCouplingJawFlankFillets(
-			pPart,
-			pDoc,
-			lugToothHeight,
-			r,
-			R,
-			D,
-			d,
-			nLug,
-			h.faceSlotB,
-			h.faceSlotB1,
-			toothDepth,
-			jawFilletR,
-			err);
 
 		try
 		{
