@@ -401,6 +401,75 @@ bool AddAnnulusBoss(
 	return true;
 }
 
+bool AddSolidCylinderBoss(
+	ksPartPtr pPart,
+	ksEntityPtr planeForSketch,
+	double radiusR,
+	double height,
+	CString* err)
+{
+	if (radiusR < 0.05 || height < 0.01)
+	{
+		if (err != nullptr)
+			*err = L"КОМПАС: некорректные размеры сплошного цилиндра (R, высота).";
+		return false;
+	}
+
+	try
+	{
+		ksEntityPtr pSketch = pPart->NewEntity(o3d_sketch);
+		ksSketchDefinitionPtr pSketchDef = pSketch->GetDefinition();
+		pSketchDef->SetPlane(planeForSketch);
+		pSketch->Create();
+
+		ksDocument2DPtr p2DDoc = pSketchDef->BeginEdit();
+		p2DDoc->ksCircle(0.0, 0.0, radiusR, 1);
+		KsAxisLineXThroughOriginStyle3(p2DDoc);
+		pSketchDef->EndEdit();
+
+		ksEntityPtr pBoss = pPart->NewEntity(o3d_bossExtrusion);
+		ksBossExtrusionDefinitionPtr pBossDef = pBoss->GetDefinition();
+		pBossDef->SetSketch(pSketch);
+		pBossDef->directionType = dtNormal;
+		pBossDef->SetSideParam(TRUE, etBlind, height, 0, FALSE);
+		pBoss->Create();
+		return true;
+	}
+	catch (const _com_error& e)
+	{
+		AppendComError(err, e);
+		return false;
+	}
+}
+
+void AddThroughAllAxisBoreCut(ksPartPtr pPart, double holeR)
+{
+	if (holeR < 0.05)
+		return;
+	try
+	{
+		ksEntityPtr pSketch = pPart->NewEntity(o3d_sketch);
+		ksSketchDefinitionPtr pSketchDef = pSketch->GetDefinition();
+		pSketchDef->SetPlane(pPart->GetDefaultEntity(o3d_planeXOY));
+		pSketch->Create();
+
+		ksDocument2DPtr p2DDoc = pSketchDef->BeginEdit();
+		p2DDoc->ksCircle(0.0, 0.0, holeR, 1);
+		KsAxisLineXThroughOriginStyle3(p2DDoc);
+		pSketchDef->EndEdit();
+
+		ksEntityPtr pCut = pPart->NewEntity(o3d_cutExtrusion);
+		ksCutExtrusionDefinitionPtr pCutDef = pCut->GetDefinition();
+		pCutDef->SetSketch(pSketch);
+		pCutDef->directionType = dtReverse;
+		pCutDef->SetSideParam(FALSE, etThroughAll, 0, 0, FALSE);
+		pCut->Create();
+	}
+	catch (const _com_error&)
+	{
+	}
+}
+
 void TryMeridianRevolveCutTriangle(
 	ksPartPtr pPart,
 	double xa,
@@ -1267,7 +1336,7 @@ bool BuildHalfCouplingPart(
 		ksEntityPtr pXoy = pPart->GetDefaultEntity(o3d_planeXOY);
 
 		const double rHub = d1 * 0.5;
-		if (!AddAnnulusBoss(pPart, pXoy, R, r, L_jaw, err))
+		if (!AddSolidCylinderBoss(pPart, pXoy, R, L_jaw, err))
 			return false;
 
 		ksEntityPtr pPlHub = pPart->NewEntity(o3d_planeOffset);
@@ -1277,8 +1346,10 @@ bool BuildHalfCouplingPart(
 		pPlHubDef->offset = L_jaw;
 		pPlHub->Create();
 
-		if (!AddAnnulusBoss(pPart, pPlHub, rHub, r, L_hub_seg, err))
+		if (!AddSolidCylinderBoss(pPart, pPlHub, rHub, L_hub_seg, err))
 			return false;
+
+		AddThroughAllAxisBoreCut(pPart, r);
 
 		AddHalfCouplingShoulderChamferCut(pPart, R, rHub, L_jaw, h.shoulderRadiusR);
 
