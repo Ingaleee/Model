@@ -745,8 +745,8 @@ void AddRadialLugs(
 		double yIL = yOL;
 		double xIR = xOR;
 		double yIR = yOR;
-		(void)ParallelFlankInnerHit(xOL, yOL, tx, ty, rIn, &xIL, &yIL);
-		(void)ParallelFlankInnerHit(xOR, yOR, tx, ty, rIn, &xIR, &yIR);
+		(void)SpiderProfile2D::ParallelFlankInnerHit(xOL, yOL, tx, ty, rIn, &xIL, &yIL);
+		(void)SpiderProfile2D::ParallelFlankInnerHit(xOR, yOR, tx, ty, rIn, &xIR, &yIR);
 		const double imx = rIn * std::cos(mid);
 		const double imy = rIn * std::sin(mid);
 		p2DDoc->ksLineSeg(xIL, yIL, xOL, yOL, 1);
