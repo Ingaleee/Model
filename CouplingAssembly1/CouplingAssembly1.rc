@@ -130,13 +130,13 @@ LTEXT           "Параметры → превью → построение в
 LTEXT           "(С) 2026 г.",IDC_STATIC,42,54,200,8
 DEFPUSHBUTTON   "ОК",IDOK,198,67,50,14,WS_GROUP
 END
-IDD_ASSEMBLY_PARAMS_DLG DIALOGEX 0, 0, 300, 248
+IDD_ASSEMBLY_PARAMS_DLG DIALOGEX 0, 0, 300, 210
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Шаг 1 из 4 — параметры сборки"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
-DEFPUSHBUTTON   "ОК",IDOK,120,226,50,14
-PUSHBUTTON      "Отмена",IDCANCEL,174,226,50,14
+DEFPUSHBUTTON   "ОК",IDOK,120,188,50,14
+PUSHBUTTON      "Отмена",IDCANCEL,174,188,50,14
 LTEXT           "Мкр, Н·м",IDC_STATIC,14,12,95,8
 COMBOBOX        IDC_COMBO_ASSEMBLY_TORQUE,115,10,70,120,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
 LTEXT           "d вала 1, мм",IDC_STATIC,14,32,95,8
@@ -154,7 +154,6 @@ LTEXT           "m, кг",IDC_STATIC,180,96,40,8
 EDITTEXT        IDC_EDIT_ASM_DER_MASS,220,94,56,14,ES_AUTOHSCROLL | ES_READONLY
 LTEXT           "b₁, мм",IDC_STATIC,180,116,40,8
 EDITTEXT        IDC_EDIT_ASM_DER_B1,220,114,56,14,ES_AUTOHSCROLL | ES_READONLY
-LTEXT           "Мкр — из ряда ГОСТ. Вариант задания (1…8) пока не задаётся здесь — уточнит преподаватель.",IDC_STATIC,14,158,270,32
 END
 
 IDD_HALFCOUPLING_PARAMS_DLG DIALOGEX 0, 0, 288, 332
@@ -393,7 +392,7 @@ END
 STRINGTABLE
 BEGIN
 ID_PARAMS_CURRENT       "Открыть параметры выбранного узла в дереве слева\nТекущий узел"
-ID_PARAMS_ASSEMBLY      "Шаг 1: Мкр из ряда ГОСТ, валы, табл. 21.3.1\nПараметры сборки"
+ID_PARAMS_ASSEMBLY      "Шаг 1: сборка, валы, табл. 21.3.1\nПараметры сборки"
 ID_PARAMS_HALF1         "Шаг 2: полумуфта под первый вал\nПолумуфта 1"
 ID_PARAMS_HALF2         "Шаг 3: полумуфта под второй вал\nПолумуфта 2"
 ID_PARAMS_SPIDER        "Шаг 4: эластичная звёздочка\nЗвёздочка"

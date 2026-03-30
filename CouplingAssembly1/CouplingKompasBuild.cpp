@@ -434,13 +434,12 @@ void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, doub
 			const double sa = (std::min)(0.999, halfB / Ro);
 			const double deltaRad =
 				(std::min)(std::asin(sa), sectorHalfRad * 0.88);
-			const double deltaDeg = deltaRad * 180.0 / kPi;
-			const double mLdeg = midDeg - deltaDeg;
-			const double mRdeg = midDeg + deltaDeg;
 			const double xOL = Ro * std::cos(mid - deltaRad);
 			const double yOL = Ro * std::sin(mid - deltaRad);
 			const double xOR = Ro * std::cos(mid + deltaRad);
 			const double yOR = Ro * std::sin(mid + deltaRad);
+			const double omx = Ro * std::cos(mid);
+			const double omy = Ro * std::sin(mid);
 
 			const double inDeg = -90.0 + (static_cast<double>(k) + 0.5) * stepDeg;
 			const double prevInDeg =
@@ -463,7 +462,7 @@ void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, doub
 			SpiderMidOnCircleArc(riInner, xIR, yIR, xV1, yV1, &xm1, &ym1);
 			p2DDoc->ksArcBy3Points(xV0, yV0, xm0, ym0, xIL, yIL, 1);
 			p2DDoc->ksLineSeg(xIL, yIL, xOL, yOL, 1);
-			p2DDoc->ksArcByAngle(0.0, 0.0, Ro, mLdeg, mRdeg, 1, 1);
+			p2DDoc->ksArcBy3Points(xOL, yOL, omx, omy, xOR, yOR, 1);
 			p2DDoc->ksLineSeg(xOR, yOR, xIR, yIR, 1);
 			p2DDoc->ksArcBy3Points(xIR, yIR, xm1, ym1, xV1, yV1, 1);
 		}

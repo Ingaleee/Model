@@ -63,7 +63,7 @@ void CHalfCouplingParamsDlg::PushToFields(const HalfCouplingParams& p)
 
 void CHalfCouplingParamsDlg::RefreshDerivedLabels()
 {
-	const int ex = GostTables::ExecutionFromCourseVariant(m_gostAssembly.courseVariant);
+	const int ex = GostTables::ClampExecution(m_gostAssembly.execution);
 	const double tSn = GostTables::SnapTorqueToSeries(m_gostAssembly.torque);
 	if (ex == 1)
 		m_kindLabel = L"Табл. 1, тип 3 (2 губки)";
@@ -118,7 +118,7 @@ BOOL CHalfCouplingParamsDlg::OnInitDialog()
 	CDialogEx::OnInitDialog();
 	const double dShaft =
 		(m_couplingIndex == 2) ? m_gostAssembly.shaftDiameter2 : m_gostAssembly.shaftDiameter1;
-	const int ex = GostTables::ExecutionFromCourseVariant(m_gostAssembly.courseVariant);
+	const int ex = GostTables::ClampExecution(m_gostAssembly.execution);
 	const wchar_t* starTxt =
 		(ex == 1) ? L"4 луча" : L"6 лучей";
 	RefreshDerivedLabels();
@@ -200,14 +200,14 @@ void CHalfCouplingParamsDlg::OnHalfFromGost()
 	}
 
 	PushToFields(trial);
-	m_lugs = (GostTables::ExecutionFromCourseVariant(m_gostAssembly.courseVariant) == 1) ? 2 : 3;
+	m_lugs = (GostTables::ClampExecution(m_gostAssembly.execution) == 1) ? 2 : 3;
 	UpdateData(FALSE);
 }
 
 HalfCouplingParams CHalfCouplingParamsDlg::GetParams() const
 {
 	HalfCouplingParams p = m_saved;
-	const int ex = GostTables::ExecutionFromCourseVariant(m_gostAssembly.courseVariant);
+	const int ex = GostTables::ClampExecution(m_gostAssembly.execution);
 	p.lugCount = (ex == 1) ? 2 : 3;
 	p.boreDiameter = m_boreDiameter;
 	p.outerDiameter = m_outerDiameter;

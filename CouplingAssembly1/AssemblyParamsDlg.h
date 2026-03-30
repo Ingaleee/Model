@@ -26,8 +26,10 @@ protected:
 	void RefreshDerivedFromGost();
 	void SetupTorqueCombo();
 	void SyncTorqueFromCombo();
+	void ApplyTorqueFromUi();
 	void OnAsmFromGost();
 	afx_msg void OnCbnSelchangeAssemblyTorque();
+	afx_msg void OnCbnCloseupAssemblyTorque();
 
 private:
 	AssemblyParams m_saved;

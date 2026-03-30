@@ -147,6 +147,7 @@ void CCouplingAssembly1Doc::Serialize(CArchive& ar)
 		ArchiveHalf(ar, m_halfCoupling1Params);
 		ArchiveHalf(ar, m_halfCoupling2Params);
 		ArchiveSpider(ar, m_spiderParams);
+		GostTables::FillAssemblyTable2131(m_assemblyParams);
 		GostTables::ApplyCourseVariantRule(
 			m_assemblyParams,
 			m_halfCoupling1Params,

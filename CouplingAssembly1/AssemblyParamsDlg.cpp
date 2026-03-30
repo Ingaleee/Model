@@ -35,6 +35,16 @@ void CAssemblyParamsDlg::SyncTorqueFromCombo()
 		m_torque = GostTables::TorqueSeriesValue(i);
 }
 
+void CAssemblyParamsDlg::ApplyTorqueFromUi()
+{
+	if (!UpdateData(TRUE))
+		return;
+	SyncTorqueFromCombo();
+	m_torque = GostTables::SnapTorqueToSeries(m_torque);
+	RefreshDerivedFromGost();
+	UpdateData(FALSE);
+}
+
 void CAssemblyParamsDlg::SetupTorqueCombo()
 {
 	m_comboTorqueSeries.ResetContent();
@@ -55,7 +65,7 @@ void CAssemblyParamsDlg::RefreshDerivedFromGost()
 	AssemblyParams a = m_saved;
 	a.torque = m_torque;
 	a.courseVariant = m_saved.courseVariant;
-	a.execution = GostTables::ExecutionFromCourseVariant(a.courseVariant);
+	a.execution = m_saved.execution;
 	a.shaftDiameter1 = m_shaft1;
 	a.shaftDiameter2 = m_shaft2;
 	GostTables::FillAssemblyTable2131(a);
@@ -84,15 +94,16 @@ void CAssemblyParamsDlg::DoDataExchange(CDataExchange* pDX)
 BEGIN_MESSAGE_MAP(CAssemblyParamsDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BTN_ASM_FROM_GOST, &CAssemblyParamsDlg::OnAsmFromGost)
 	ON_CBN_SELCHANGE(IDC_COMBO_ASSEMBLY_TORQUE, &CAssemblyParamsDlg::OnCbnSelchangeAssemblyTorque)
+	ON_CBN_CLOSEUP(IDC_COMBO_ASSEMBLY_TORQUE, &CAssemblyParamsDlg::OnCbnCloseupAssemblyTorque)
 END_MESSAGE_MAP()
 
 BOOL CAssemblyParamsDlg::OnInitDialog()
 {
 	CDialogEx::OnInitDialog();
 	SetWindowTextW(L"Шаг 1 из 4 — сборка (табл. 21.3.1 ГОСТ 2131)");
-	RefreshDerivedFromGost();
-	UpdateData(FALSE);
 	SetupTorqueCombo();
+	SyncTorqueFromCombo();
+	m_torque = GostTables::SnapTorqueToSeries(m_torque);
 	RefreshDerivedFromGost();
 	UpdateData(FALSE);
 	return TRUE;
@@ -100,18 +111,17 @@ BOOL CAssemblyParamsDlg::OnInitDialog()
 
 void CAssemblyParamsDlg::OnCbnSelchangeAssemblyTorque()
 {
-	SyncTorqueFromCombo();
-	RefreshDerivedFromGost();
-	UpdateData(FALSE);
+	ApplyTorqueFromUi();
+}
+
+void CAssemblyParamsDlg::OnCbnCloseupAssemblyTorque()
+{
+	ApplyTorqueFromUi();
 }
 
 void CAssemblyParamsDlg::OnAsmFromGost()
 {
-	if (!UpdateData(TRUE))
-		return;
-	SyncTorqueFromCombo();
-	RefreshDerivedFromGost();
-	UpdateData(FALSE);
+	ApplyTorqueFromUi();
 }
 
 AssemblyParams CAssemblyParamsDlg::GetParams() const
@@ -123,10 +133,11 @@ AssemblyParams CAssemblyParamsDlg::GetParams() const
 		if (i >= 0)
 			torqueUse = GostTables::TorqueSeriesValue(i);
 	}
+	torqueUse = GostTables::SnapTorqueToSeries(torqueUse);
 	AssemblyParams p = m_saved;
 	p.torque = torqueUse;
 	p.courseVariant = m_saved.courseVariant;
-	p.execution = GostTables::ExecutionFromCourseVariant(p.courseVariant);
+	p.execution = m_saved.execution;
 	p.shaftDiameter1 = m_shaft1;
 	p.shaftDiameter2 = m_shaft2;
 	GostTables::FillAssemblyTable2131(p);

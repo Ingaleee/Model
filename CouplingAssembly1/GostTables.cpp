@@ -185,6 +185,25 @@ const Asm2131Row* FindAsm2131(double mkp, int execution)
 	return best;
 }
 
+static const Asm2131Row* ResolveAsm2131RowForTorque(double t, int exec)
+{
+	exec = ClampExecution(exec);
+	for (const auto& r : kAsm2131)
+	{
+		if (std::abs(r.mkp - t) < 1e-6 && r.execution == exec)
+			return &r;
+	}
+	for (const auto& r : kAsm2131)
+	{
+		if (std::abs(r.mkp - t) < 1e-6)
+			return &r;
+	}
+	const Asm2131Row* ar = FindAsm2131(t, exec);
+	if (ar != nullptr && exec == 1 && std::abs(ar->mkp - t) > 1e-3)
+		ar = FindAsm2131(t, 2);
+	return ar;
+}
+
 const HalfFullRow* FindHalfRow(double mkp, int execution, double dShaft)
 {
 	const int wantMask = (execution == 1) ? 1 : 2;
@@ -358,7 +377,7 @@ void ApplyCourseVariantRule(
 	HalfCouplingParams& half2,
 	SpiderParams& spider)
 {
-	const int ex = ExecutionFromCourseVariant(assembly.courseVariant);
+	const int ex = ClampExecution(assembly.execution);
 	assembly.execution = ex;
 	spider.rays = (ex == 1) ? 4 : 6;
 	const int lugs = (ex == 1) ? 2 : 3;
@@ -372,11 +391,10 @@ void FillAssemblyTable2131(AssemblyParams& assembly)
 {
 	const double t = SnapTorqueToSeries(assembly.torque);
 	const int exec = ClampExecution(assembly.execution);
-	const Asm2131Row* ar = FindAsm2131(t, exec);
-	if (ar == nullptr && exec == 1)
-		ar = FindAsm2131(t, 2);
+	const Asm2131Row* ar = ResolveAsm2131RowForTorque(t, exec);
 	if (ar != nullptr)
 	{
+		assembly.execution = ClampExecution(ar->execution);
 		assembly.assemblyLengthL = ar->L;
 		assembly.envelopeD1 = ar->D1;
 		assembly.maxSpeedRpm = ar->nmax;
@@ -409,9 +427,7 @@ void LookupSpiderFromGost(const AssemblyParams& assembly, SpiderParams& spider)
 		FillSpiderFromRow(spider, *sr);
 	spider.rays = (exec == 1) ? 4 : 6;
 
-	const Asm2131Row* ar = FindAsm2131(t, exec);
-	if (ar == nullptr && exec == 1)
-		ar = FindAsm2131(t, 2);
+	const Asm2131Row* ar = ResolveAsm2131RowForTorque(t, exec);
 	if (ar != nullptr && ar->R_asm > 0.04)
 		spider.filletRadius = (std::max)(spider.filletRadius, ar->R_asm);
 }
@@ -422,12 +438,11 @@ void ApplyAssemblyToParts(
 	HalfCouplingParams& half2,
 	SpiderParams& spider)
 {
-	ApplyCourseVariantRule(assembly, half1, half2, spider);
 	FillAssemblyTable2131(assembly);
+	ApplyCourseVariantRule(assembly, half1, half2, spider);
 	LookupHalfFromGost(assembly, half1, assembly.shaftDiameter1);
 	LookupHalfFromGost(assembly, half2, assembly.shaftDiameter2);
 	LookupSpiderFromGost(assembly, spider);
-	ApplyCourseVariantRule(assembly, half1, half2, spider);
 }
 
 }
