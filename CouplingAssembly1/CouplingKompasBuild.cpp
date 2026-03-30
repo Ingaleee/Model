@@ -925,7 +925,6 @@ void AddRadialLugs(
 			pSkTooth->Create();
 			ksDocument2DPtr p2DDoc = pSkToothDef->BeginEdit();
 			const bool drawn = DrawHalfCouplingTwoLugAnnulusSector(p2DDoc, R, rInnerFace, Bmm);
-			KsAxisLineXThroughOriginStyle3(p2DDoc);
 			pSkToothDef->EndEdit();
 			if (!drawn)
 				return;
@@ -1014,7 +1013,6 @@ void AddRadialLugs(
 		p2DDoc->ksArcBy3Points(xOL, yOL, omx, omy, xOR, yOR, 1);
 		p2DDoc->ksLineSeg(xOR, yOR, xIR, yIR, 1);
 		p2DDoc->ksArcBy3Points(xIR, yIR, imx, imy, xIL, yIL, 1);
-		KsAxisLineXThroughOriginStyle3(p2DDoc);
 		pSkToothDef->EndEdit();
 
 		ksEntityPtr pToothBoss = pPart->NewEntity(o3d_bossExtrusion);
@@ -1519,7 +1517,6 @@ bool BuildHalfCouplingPart(
 
 		const int nLug = (std::max)(2, lugCount);
 		const double toothDepth = (std::min)(8.5, (std::max)(2.8, spiderLegWidth * 0.62));
-		double lugToothHeight = 0.0;
 		AddRadialLugs(
 			pPart,
 			D,
@@ -1532,36 +1529,10 @@ bool BuildHalfCouplingPart(
 			h.lengthL3,
 			spiderLegWidth,
 			rHub,
-			&lugToothHeight,
+			nullptr,
 			err);
 
 		(void)gostSeriesTorqueNm;
-
-		try
-		{
-			pDoc->RebuildDocument();
-		}
-		catch (const _com_error&)
-		{
-		}
-
-		const double jawFilletR =
-			(h.filletR > 0.05) ? h.filletR : (std::min)(1.2, (std::max)(0.45, h.faceSlotB * 0.14));
-		AddHalfCouplingJawFlankFillets(
-			pPart,
-			pDoc,
-			lugToothHeight,
-			r,
-			R,
-			D,
-			d,
-			nLug,
-			h.faceSlotB,
-			h.faceSlotB1,
-			toothDepth,
-			rHub,
-			jawFilletR,
-			err);
 
 		try
 		{
