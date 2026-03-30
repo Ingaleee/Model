@@ -1436,6 +1436,8 @@ bool BuildHalfCouplingPart(
 
 		AddThroughAllAxisBoreCut(pPart, r);
 
+		AddHalfCouplingShoulderChamferCut(pPart, R, rHub, L_jaw, h.shoulderRadiusR);
+
 		const double keyHalfW = h.keywayWidthB * 0.5;
 		const double t1 = (std::max)(0.1, h.keywayDt1 - d);
 		const double keyDepth = (std::min)(
@@ -1465,9 +1467,26 @@ bool BuildHalfCouplingPart(
 			h.filletR,
 			0.0);
 
+		const int nLug = (std::max)(2, lugCount);
+		const double toothDepth = (std::min)(8.5, (std::max)(2.8, spiderLegWidth * 0.62));
+		AddRadialLugs(
+			pPart,
+			D,
+			d,
+			L_jaw,
+			nLug,
+			toothDepth,
+			h.faceSlotB,
+			h.faceSlotB1,
+			h.lengthL3,
+			spiderLegWidth,
+			rHub,
+			nullptr,
+			err);
+
 		(void)gostSeriesTorqueNm;
-		(void)lugCount;
-		(void)spiderLegWidth;
+
+		AddHalfCouplingHubEndAndJawFaceChamferCuts(pPart, R, r, rHub, L_jaw, L1, h.gostTableId);
 
 		try
 		{
