@@ -987,7 +987,7 @@ static void AddSpiderCylindricalBoreCut(
 	ksPartPtr pPart,
 	double boreR,
 	double bossHeightMm,
-	ksEntityPtr* outCutOp = nullptr)
+	ksEntity** outCutOp = nullptr)
 {
 	if (outCutOp != nullptr)
 		*outCutOp = nullptr;
@@ -1011,7 +1011,7 @@ static void AddSpiderCylindricalBoreCut(
 		pCutDef->SetSideParam(TRUE, etBlind, depth, 0, FALSE);
 		pCut->Create();
 		if (outCutOp != nullptr)
-			*outCutOp = pCut;
+			*outCutOp = pCut.Detach();
 	}
 	catch (const _com_error&)
 	{
@@ -1082,8 +1082,11 @@ bool BuildSpiderPart(
 		pBossDef->SetSideParam(TRUE, etBlind, H, 0, FALSE);
 		pBoss->Create();
 
-		ksEntityPtr pBoreCut{};
-		AddSpiderCylindricalBoreCut(pPart, Ri, H, &pBoreCut);
+		ksEntity* pBoreCutRaw = nullptr;
+		AddSpiderCylindricalBoreCut(pPart, Ri, H, &pBoreCutRaw);
+		ksEntityPtr pBoreCut;
+		if (pBoreCutRaw != nullptr)
+			pBoreCut.Attach(pBoreCutRaw);
 
 		try
 		{
