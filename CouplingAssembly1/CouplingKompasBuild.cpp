@@ -62,6 +62,12 @@ static bool SpiderEdgeAtSpiderValleyBisectorDeg(double angDeg, int nRays)
 	return false;
 }
 
+static double SpiderAbsDiffDeg(double aDeg, double bDeg)
+{
+	const double d = std::fmod(aDeg - bDeg + 540.0, 360.0) - 180.0;
+	return std::fabs(d);
+}
+
 void AddSpiderInnerCylinderFlankFillets(
 	ksPartPtr pPart,
 	ksDocument3DPtr pDoc,
@@ -70,6 +76,8 @@ void AddSpiderInnerCylinderFlankFillets(
 	double thicknessH,
 	double filletRmm,
 	int nRays,
+	const double* targetAnglesDeg,
+	int nTargetAngles,
 	CString* err)
 {
 	if (pPart == nullptr || pDoc == nullptr || pBoss == nullptr || nRays < 3)
@@ -91,16 +99,17 @@ void AddSpiderInnerCylinderFlankFillets(
 	{
 	}
 
-	const double tolR = (std::max)(0.35, riProfile * 0.035);
-	const double tolXY = 0.04;
+	const double tolR = (std::max)(0.5, riProfile * 0.05);
 	const double zSpanMin = thicknessH * 0.82;
+	const long want = static_cast<long>(nRays) * 2;
 
-	auto pickFlankInnerVerticalEdges = [&](
-		double xyTol,
-		double zMinF,
-		double rTolF,
-		bool useValleyFilter) -> std::vector<ksEntityPtr> {
-		std::vector<ksEntityPtr> out;
+	auto collectVerticalInnerBossEdges = [&](double xyTol, double zMinF, double rTolF, bool bisectorSkip) {
+		struct Item
+		{
+			ksEntityPtr ed;
+			double angDeg;
+		};
+		std::vector<Item> out;
 		ksEntityCollectionPtr edges = pPart->EntityCollection(o3d_edge);
 		for (long i = 0; i < edges->GetCount(); ++i)
 		{
@@ -131,32 +140,91 @@ void AddSpiderInnerCylinderFlankFillets(
 			if (std::fabs(r1 - riProfile) > tolR * rTolF ||
 				std::fabs(r2 - riProfile) > tolR * rTolF)
 				continue;
-			if (useValleyFilter)
-			{
-				const double angDeg = std::atan2(y1, x1) * (180.0 / kPi);
-				if (SpiderEdgeAtSpiderValleyBisectorDeg(angDeg, nRays))
-					continue;
-			}
-			out.push_back(ed);
+			const double angDeg = std::atan2(0.5 * (y1 + y2), 0.5 * (x1 + x2)) * (180.0 / kPi);
+			if (bisectorSkip && SpiderEdgeAtSpiderValleyBisectorDeg(angDeg, nRays))
+				continue;
+			out.push_back({ed, angDeg});
 		}
 		return out;
 	};
 
 	try
 	{
-		const long expectedVert = static_cast<long>(nRays) * 2;
-		std::vector<ksEntityPtr> picked = pickFlankInnerVerticalEdges(tolXY, 1.0, 1.0, true);
-		if (static_cast<long>(picked.size()) < expectedVert)
+		std::vector<ksEntityPtr> picked;
+		const bool useAngles =
+			targetAnglesDeg != nullptr && nTargetAngles == static_cast<int>(want) && want > 0;
+
+		if (useAngles)
 		{
-			try
-			{
-				pDoc->RebuildDocument();
-			}
-			catch (const _com_error&)
-			{
-			}
-			picked = pickFlankInnerVerticalEdges(tolXY * 5.0, 0.75, 1.35, true);
+			auto tryPick = [&](double xyTol, double zMinF, double rTolF, double angTol1, double angTol2) {
+				std::vector<char> used;
+				std::vector<ksEntityPtr> bySlot(static_cast<size_t>(want), nullptr);
+				auto cands = collectVerticalInnerBossEdges(xyTol, zMinF, rTolF, false);
+				used.assign(cands.size(), 0);
+				for (int pass = 0; pass < 2; ++pass)
+				{
+					const double angTol = (pass == 0) ? angTol1 : angTol2;
+					for (long j = 0; j < want; ++j)
+					{
+						if (bySlot[static_cast<size_t>(j)] != nullptr)
+							continue;
+						double bestD = 1e300;
+						size_t bestI = cands.size();
+						for (size_t i = 0; i < cands.size(); ++i)
+						{
+							if (used[i])
+								continue;
+							const double d = SpiderAbsDiffDeg(cands[i].angDeg, targetAnglesDeg[j]);
+							if (d < bestD)
+							{
+								bestD = d;
+								bestI = i;
+							}
+						}
+						if (bestI < cands.size() && bestD <= angTol)
+						{
+							used[bestI] = 1;
+							bySlot[static_cast<size_t>(j)] = cands[bestI].ed;
+						}
+					}
+				}
+				std::vector<ksEntityPtr> r;
+				for (long j = 0; j < want; ++j)
+				{
+					if (bySlot[static_cast<size_t>(j)] != nullptr)
+						r.push_back(bySlot[static_cast<size_t>(j)]);
+				}
+				return r;
+			};
+
+			picked = tryPick(0.12, 0.72, 1.35, 11.0, 22.0);
+			if (static_cast<long>(picked.size()) < want)
+				picked = tryPick(0.22, 0.65, 1.85, 14.0, 28.0);
+			if (static_cast<long>(picked.size()) < want)
+				picked.clear();
 		}
+
+		if (picked.empty())
+		{
+			auto cLegacy = collectVerticalInnerBossEdges(0.04, 1.0, 1.0, true);
+			for (const auto& it : cLegacy)
+				picked.push_back(it.ed);
+			if (static_cast<long>(picked.size()) < want)
+			{
+				try
+				{
+					pDoc->RebuildDocument();
+				}
+				catch (const _com_error&)
+				{
+				}
+				cLegacy = collectVerticalInnerBossEdges(0.2, 0.75, 1.35, true);
+				picked.clear();
+				for (const auto& it : cLegacy)
+					picked.push_back(it.ed);
+			}
+		}
+
 		if (picked.empty())
 		{
 			if (err != nullptr)
@@ -385,6 +453,84 @@ static bool ParallelFlankInnerHit(
 	return true;
 }
 
+static void SpiderFill46RayInnerOuterPoints(
+	int n,
+	double Ro,
+	double Ri,
+	double legWidthB,
+	double xIL[8],
+	double yIL[8],
+	double xOL[8],
+	double yOL[8],
+	double xOR[8],
+	double yOR[8],
+	double xIR[8],
+	double yIR[8],
+	double omx[8],
+	double omy[8])
+{
+	if (n != 4 && n != 6)
+		return;
+	const double toRad = kPi / 180.0;
+	const double stepDeg = 360.0 / static_cast<double>(n);
+	const double sectorHalfRad = kPi / static_cast<double>(n);
+	const double riInner = Ri;
+	for (int k = 0; k < n; ++k)
+	{
+		const double midDeg = -90.0 + static_cast<double>(k) * stepDeg;
+		const double mid = midDeg * toRad;
+		const double tx = -std::sin(mid);
+		const double ty = std::cos(mid);
+		const double halfB = legWidthB * 0.5;
+		const double sa = (std::min)(0.999, halfB / Ro);
+		const double deltaRad =
+			(std::min)(std::asin(sa), sectorHalfRad * 0.88);
+		xOL[k] = Ro * std::cos(mid - deltaRad);
+		yOL[k] = Ro * std::sin(mid - deltaRad);
+		xOR[k] = Ro * std::cos(mid + deltaRad);
+		yOR[k] = Ro * std::sin(mid + deltaRad);
+		omx[k] = Ro * std::cos(mid);
+		omy[k] = Ro * std::sin(mid);
+
+		const double inDeg = -90.0 + (static_cast<double>(k) + 0.5) * stepDeg;
+		const double prevInDeg =
+			(k == 0) ? (-90.0 + (static_cast<double>(n) - 0.5) * stepDeg)
+					 : (-90.0 + (static_cast<double>(k) - 0.5) * stepDeg);
+		const double xV0 = riInner * std::cos(prevInDeg * toRad);
+		const double yV0 = riInner * std::sin(prevInDeg * toRad);
+		const double xV1 = riInner * std::cos(inDeg * toRad);
+		const double yV1 = riInner * std::sin(inDeg * toRad);
+
+		xIL[k] = xV0;
+		yIL[k] = yV0;
+		xIR[k] = xV1;
+		yIR[k] = yV1;
+		(void)ParallelFlankInnerHit(xOL[k], yOL[k], tx, ty, riInner, &xIL[k], &yIL[k]);
+		(void)ParallelFlankInnerHit(xOR[k], yOR[k], tx, ty, riInner, &xIR[k], &yIR[k]);
+	}
+}
+
+static void SpiderFlankFilletTargetAnglesDeg(
+	int n,
+	double Ro,
+	double Ri,
+	double legWidthB,
+	double* outDeg,
+	int outCap)
+{
+	if ((n != 4 && n != 6) || outCap < 2 * n)
+		return;
+	double xIL[8]{}, yIL[8]{}, xOL[8]{}, yOL[8]{}, xOR[8]{}, yOR[8]{}, xIR[8]{}, yIR[8]{};
+	double omx[8]{}, omy[8]{};
+	SpiderFill46RayInnerOuterPoints(n, Ro, Ri, legWidthB, xIL, yIL, xOL, yOL, xOR, yOR, xIR, yIR, omx, omy);
+	int idx = 0;
+	for (int k = 0; k < n; ++k)
+	{
+		outDeg[idx++] = std::atan2(yIL[k], xIL[k]) * (180.0 / kPi);
+		outDeg[idx++] = std::atan2(yIR[k], xIR[k]) * (180.0 / kPi);
+	}
+}
+
 void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, double filletR, double legWidthB)
 {
 	const double toRad = kPi / 180.0;
@@ -393,44 +539,10 @@ void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, doub
 	{
 		const double riInner = Ri;
 		const double stepDeg = 360.0 / static_cast<double>(n);
-		const double sectorHalfRad = kPi / static_cast<double>(n);
 
 		double xIL[8]{}, yIL[8]{}, xOL[8]{}, yOL[8]{}, xOR[8]{}, yOR[8]{}, xIR[8]{}, yIR[8]{};
 		double omx[8]{}, omy[8]{};
-
-		for (int k = 0; k < n; ++k)
-		{
-			const double midDeg = -90.0 + static_cast<double>(k) * stepDeg;
-			const double mid = midDeg * toRad;
-			const double tx = -std::sin(mid);
-			const double ty = std::cos(mid);
-			const double halfB = legWidthB * 0.5;
-			const double sa = (std::min)(0.999, halfB / Ro);
-			const double deltaRad =
-				(std::min)(std::asin(sa), sectorHalfRad * 0.88);
-			xOL[k] = Ro * std::cos(mid - deltaRad);
-			yOL[k] = Ro * std::sin(mid - deltaRad);
-			xOR[k] = Ro * std::cos(mid + deltaRad);
-			yOR[k] = Ro * std::sin(mid + deltaRad);
-			omx[k] = Ro * std::cos(mid);
-			omy[k] = Ro * std::sin(mid);
-
-			const double inDeg = -90.0 + (static_cast<double>(k) + 0.5) * stepDeg;
-			const double prevInDeg =
-				(k == 0) ? (-90.0 + (static_cast<double>(n) - 0.5) * stepDeg)
-						 : (-90.0 + (static_cast<double>(k) - 0.5) * stepDeg);
-			const double xV0 = riInner * std::cos(prevInDeg * toRad);
-			const double yV0 = riInner * std::sin(prevInDeg * toRad);
-			const double xV1 = riInner * std::cos(inDeg * toRad);
-			const double yV1 = riInner * std::sin(inDeg * toRad);
-
-			xIL[k] = xV0;
-			yIL[k] = yV0;
-			xIR[k] = xV1;
-			yIR[k] = yV1;
-			(void)ParallelFlankInnerHit(xOL[k], yOL[k], tx, ty, riInner, &xIL[k], &yIL[k]);
-			(void)ParallelFlankInnerHit(xOR[k], yOR[k], tx, ty, riInner, &xIR[k], &yIR[k]);
-		}
+		SpiderFill46RayInnerOuterPoints(n, Ro, Ri, legWidthB, xIL, yIL, xOL, yOL, xOR, yOR, xIR, yIR, omx, omy);
 
 		for (int k = 0; k < n; ++k)
 		{
@@ -567,6 +679,9 @@ bool BuildSpiderPart(
 		}
 
 		if (n == 4 || n == 6)
+		{
+			double flankAngDeg[16]{};
+			SpiderFlankFilletTargetAnglesDeg(n, Ro, Ri, s.legWidth, flankAngDeg, 16);
 			AddSpiderInnerCylinderFlankFillets(
 				pPart,
 				pDoc,
@@ -575,7 +690,10 @@ bool BuildSpiderPart(
 				H,
 				s.filletRadius,
 				n,
+				flankAngDeg,
+				2 * n,
 				err);
+		}
 
 		try
 		{
@@ -704,13 +822,6 @@ void AddRadialLugs(
 
 	const double degStep = 360.0 / static_cast<double>(lugCount);
 	const double chordB = (std::max)(faceSlotB, faceSlotB1 * 0.52);
-	double halfAngleOuter = std::asin((std::min)(0.995, chordB / (2.0 * R)));
-	const double maxHalf = (kPi / static_cast<double>(lugCount)) * 0.46;
-	halfAngleOuter = (std::min)(halfAngleOuter, maxHalf);
-	halfAngleOuter = (std::max)(
-		halfAngleOuter,
-		(std::min)(11.0 * kPi / 180.0, maxHalf * 0.58));
-	halfAngleOuter = (std::min)(halfAngleOuter, maxHalf);
 
 	double depthUse = (std::max)(1.2, toothRadialDepth);
 	depthUse = (std::min)(depthUse, (R - r) * 0.85);
@@ -723,20 +834,19 @@ void AddRadialLugs(
 	if (rOut <= rIn + 0.2 || rIn <= r + 0.15)
 		return;
 
-	double halfAngleInner = std::atan(std::tan(halfAngleOuter) * (rIn / R) * 0.88);
-	halfAngleInner = (std::max)(halfAngleInner, 6.5 * kPi / 180.0);
-	halfAngleInner = (std::min)(halfAngleInner, halfAngleOuter - 0.035);
+	const double maxDelta = (kPi / static_cast<double>(lugCount)) * 0.46;
+	double deltaRad = std::asin((std::min)(0.999, chordB / (2.0 * rOut)));
+	deltaRad = (std::min)(deltaRad, maxDelta);
+	deltaRad = (std::max)(
+		deltaRad,
+		(std::min)(11.0 * kPi / 180.0, maxDelta * 0.58));
+	deltaRad = (std::min)(deltaRad, maxDelta);
 
 	const double toothH = (lengthL3mm > 0.6)
 		? (std::min)(lengthL3mm, L_jaw * 0.96)
 		: (std::min)(L_jaw * 0.90, (std::max)(3.5, spiderLegWidth * 1.08));
 	if (toothH < 0.8)
 		return;
-
-	const double a0 = -halfAngleInner;
-	const double a1 = halfAngleInner;
-	const double b0 = -halfAngleOuter;
-	const double b1 = halfAngleOuter;
 
 	try
 	{
@@ -746,19 +856,27 @@ void AddRadialLugs(
 		pSkTooth->Create();
 
 		ksDocument2DPtr p2DDoc = pSkToothDef->BeginEdit();
-		double point_1[4][2]{};
-		point_1[0][0] = rIn * std::cos(a0);
-		point_1[0][1] = rIn * std::sin(a0);
-		point_1[1][0] = rOut * std::cos(b0);
-		point_1[1][1] = rOut * std::sin(b0);
-		point_1[2][0] = rOut * std::cos(b1);
-		point_1[2][1] = rOut * std::sin(b1);
-		point_1[3][0] = rIn * std::cos(a1);
-		point_1[3][1] = rIn * std::sin(a1);
-		p2DDoc->ksLineSeg(point_1[0][0], point_1[0][1], point_1[1][0], point_1[1][1], 1);
-		p2DDoc->ksLineSeg(point_1[1][0], point_1[1][1], point_1[2][0], point_1[2][1], 1);
-		p2DDoc->ksLineSeg(point_1[2][0], point_1[2][1], point_1[3][0], point_1[3][1], 1);
-		p2DDoc->ksLineSeg(point_1[3][0], point_1[3][1], point_1[0][0], point_1[0][1], 1);
+		const double mid = 0.0;
+		const double tx = -std::sin(mid);
+		const double ty = std::cos(mid);
+		const double xOL = rOut * std::cos(-deltaRad);
+		const double yOL = rOut * std::sin(-deltaRad);
+		const double xOR = rOut * std::cos(deltaRad);
+		const double yOR = rOut * std::sin(deltaRad);
+		const double omx = rOut * std::cos(mid);
+		const double omy = rOut * std::sin(mid);
+		double xIL = xOL;
+		double yIL = yOL;
+		double xIR = xOR;
+		double yIR = yOR;
+		(void)ParallelFlankInnerHit(xOL, yOL, tx, ty, rIn, &xIL, &yIL);
+		(void)ParallelFlankInnerHit(xOR, yOR, tx, ty, rIn, &xIR, &yIR);
+		const double imx = rIn * std::cos(mid);
+		const double imy = rIn * std::sin(mid);
+		p2DDoc->ksLineSeg(xIL, yIL, xOL, yOL, 1);
+		p2DDoc->ksArcBy3Points(xOL, yOL, omx, omy, xOR, yOR, 1);
+		p2DDoc->ksLineSeg(xOR, yOR, xIR, yIR, 1);
+		p2DDoc->ksArcBy3Points(xIR, yIR, imx, imy, xIL, yIL, 1);
 		KsAxisLineXThroughOriginStyle3(p2DDoc);
 		pSkToothDef->EndEdit();
 
