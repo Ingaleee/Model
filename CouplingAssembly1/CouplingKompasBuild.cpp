@@ -567,13 +567,23 @@ void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, doub
 		for (int k = 0; k < n; ++k)
 		{
 			const int kp1 = (k + 1) % n;
+			const double midDeg = -90.0 + static_cast<double>(k) * (360.0 / static_cast<double>(n));
+			const double halfB = legWidthB * 0.5;
+			const double sa = (std::min)(0.999, halfB / Ro);
+			const double deltaRad =
+				(std::min)(std::asin(sa), kPi / static_cast<double>(n));
+			const double deltaDeg = deltaRad * (180.0 / kPi);
+			const double aOut1 = midDeg - deltaDeg;
+			const double aOut2 = midDeg + deltaDeg;
 
 			p2DDoc->ksLineSeg(xIL[k], yIL[k], xOL[k], yOL[k], 1);
-			p2DDoc->ksArcBy3Points(xOL[k], yOL[k], omx[k], omy[k], xOR[k], yOR[k], 1);
+			p2DDoc->ksArcByAngle(0.0, 0.0, Ro, aOut1, aOut2, 1, 1);
 			p2DDoc->ksLineSeg(xOR[k], yOR[k], xIR[k], yIR[k], 1);
 			p2DDoc->ksLineSeg(xIR[k], yIR[k], xIL[kp1], yIL[kp1], 1);
 		}
 		(void)filletR;
+		(void)omx;
+		(void)omy;
 		return;
 	}
 
@@ -698,7 +708,6 @@ bool BuildSpiderPart(
 
 		ksDocument2DPtr p2DDoc = pSketchDef->BeginEdit();
 		DrawSpiderProfile(p2DDoc, n, Ro, Ri, rf, s.legWidth);
-		KsAxisLineXThroughOriginStyle3(p2DDoc);
 		pSketchDef->EndEdit();
 
 		ksEntityPtr pBoss = pPart->NewEntity(o3d_bossExtrusion);
