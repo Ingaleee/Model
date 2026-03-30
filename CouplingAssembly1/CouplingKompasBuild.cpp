@@ -20,6 +20,24 @@ namespace
 {
 constexpr double kPi = 3.14159265358979323846;
 
+inline double NormDeg360(double a)
+{
+	double x = std::fmod(a, 360.0);
+	if (x < 0.0)
+		x += 360.0;
+	return x;
+}
+
+inline bool DegOnCCWArc(double as, double ae, double t)
+{
+	as = NormDeg360(as);
+	ae = NormDeg360(ae);
+	t = NormDeg360(t);
+	if (as <= ae + 1e-9)
+		return t + 1e-6 >= as && t - 1e-6 <= ae;
+	return t + 1e-6 >= as || t - 1e-6 <= ae;
+}
+
 inline bool KompasSourceFileExists(LPCWSTR path)
 {
 	if (path == nullptr || path[0] == 0)
@@ -564,10 +582,11 @@ void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, doub
 		double omx[8]{}, omy[8]{};
 		SpiderProfile2D::Fill46RayInnerOuterPoints(n, Ro, Ri, legWidthB, xIL, yIL, xOL, yOL, xOR, yOR, xIR, yIR, omx, omy);
 
+		const double stepDeg = 360.0 / static_cast<double>(n);
 		for (int k = 0; k < n; ++k)
 		{
 			const int kp1 = (k + 1) % n;
-			const double midDeg = -90.0 + static_cast<double>(k) * (360.0 / static_cast<double>(n));
+			const double midDeg = -90.0 + static_cast<double>(k) * stepDeg;
 			const double halfB = legWidthB * 0.5;
 			const double sa = (std::min)(0.999, halfB / Ro);
 			const double deltaRad =
@@ -575,11 +594,15 @@ void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, doub
 			const double deltaDeg = deltaRad * (180.0 / kPi);
 			const double aOut1 = midDeg - deltaDeg;
 			const double aOut2 = midDeg + deltaDeg;
+			const double valleyDeg = -90.0 + (static_cast<double>(k) + 0.5) * stepDeg;
+			const double aInnerIR = std::atan2(yIR[k], xIR[k]) * (180.0 / kPi);
+			const double aInnerIL1 = std::atan2(yIL[kp1], xIL[kp1]) * (180.0 / kPi);
+			const int innerDir = DegOnCCWArc(aInnerIR, aInnerIL1, valleyDeg) ? 1 : -1;
 
 			p2DDoc->ksLineSeg(xIL[k], yIL[k], xOL[k], yOL[k], 1);
 			p2DDoc->ksArcByAngle(0.0, 0.0, Ro, aOut1, aOut2, 1, 1);
 			p2DDoc->ksLineSeg(xOR[k], yOR[k], xIR[k], yIR[k], 1);
-			p2DDoc->ksLineSeg(xIR[k], yIR[k], xIL[kp1], yIL[kp1], 1);
+			p2DDoc->ksArcByAngle(0.0, 0.0, Ri, aInnerIR, aInnerIL1, innerDir, 1);
 		}
 		(void)filletR;
 		(void)omx;
