@@ -136,8 +136,8 @@ void Fill46RayInnerOuterPoints(
 	{
 		const double midDeg = -90.0 + static_cast<double>(k) * stepDeg;
 		const double mid = midDeg * toRad;
-		const double tx = -std::sin(mid);
-		const double ty = std::cos(mid);
+		const double urx = std::cos(mid);
+		const double ury = std::sin(mid);
 		const double halfB = legWidthB * 0.5;
 		const double sa = (std::min)(0.999, halfB / Ro);
 		const double deltaRad = (std::min)(std::asin(sa), sectorHalfRad);
@@ -161,8 +161,8 @@ void Fill46RayInnerOuterPoints(
 		yIL[k] = yV0;
 		xIR[k] = xV1;
 		yIR[k] = yV1;
-		(void)ParallelFlankInnerHit(xOL[k], yOL[k], tx, ty, riInner, &xIL[k], &yIL[k]);
-		(void)ParallelFlankInnerHit(xOR[k], yOR[k], tx, ty, riInner, &xIR[k], &yIR[k]);
+		(void)ParallelFlankInnerHit(xOL[k], yOL[k], urx, ury, riInner, &xIL[k], &yIL[k]);
+		(void)ParallelFlankInnerHit(xOR[k], yOR[k], urx, ury, riInner, &xIR[k], &yIR[k]);
 	}
 }
 

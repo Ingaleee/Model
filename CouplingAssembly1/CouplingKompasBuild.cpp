@@ -831,8 +831,8 @@ void AddRadialLugs(
 
 		ksDocument2DPtr p2DDoc = pSkToothDef->BeginEdit();
 		const double mid = 0.0;
-		const double tx = -std::sin(mid);
-		const double ty = std::cos(mid);
+		const double urx = std::cos(mid);
+		const double ury = std::sin(mid);
 		const double xOL = rOut * std::cos(-deltaRad);
 		const double yOL = rOut * std::sin(-deltaRad);
 		const double xOR = rOut * std::cos(deltaRad);
@@ -843,8 +843,8 @@ void AddRadialLugs(
 		double yIL = yOL;
 		double xIR = xOR;
 		double yIR = yOR;
-		(void)SpiderProfile2D::ParallelFlankInnerHit(xOL, yOL, tx, ty, rIn, &xIL, &yIL);
-		(void)SpiderProfile2D::ParallelFlankInnerHit(xOR, yOR, tx, ty, rIn, &xIR, &yIR);
+		(void)SpiderProfile2D::ParallelFlankInnerHit(xOL, yOL, urx, ury, rIn, &xIL, &yIL);
+		(void)SpiderProfile2D::ParallelFlankInnerHit(xOR, yOR, urx, ury, rIn, &xIR, &yIR);
 		const double imx = rIn * std::cos(mid);
 		const double imy = rIn * std::sin(mid);
 		p2DDoc->ksLineSeg(xIL, yIL, xOL, yOL, 1);
