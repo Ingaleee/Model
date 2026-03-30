@@ -1048,6 +1048,7 @@ void AddHalfCouplingJawFlankFillets(
 	double faceSlotB,
 	double faceSlotB1,
 	double toothRadialDepth,
+	double hubOuterR,
 	double filletRmm,
 	CString* err)
 {
@@ -1058,37 +1059,81 @@ void AddHalfCouplingJawFlankFillets(
 		return;
 
 	const double r = d * 0.5;
-	const double chordB = (std::max)(faceSlotB, faceSlotB1 * 0.52);
-	double depthUse = (std::max)(1.2, toothRadialDepth);
-	depthUse = (std::min)(depthUse, (R - r) * 0.85);
-	depthUse = (std::min)(depthUse, R * 0.22);
-	const double rOut = (std::min)(R + depthUse, D * 0.52);
-	double rIn = (std::max)(r + 0.55, R - depthUse);
-	rIn = (std::min)(rIn, rOut - 0.35);
-	rIn = (std::max)(rIn, r + 0.35);
-	if (rOut <= rIn + 0.12)
-		return;
 
-	const double maxDelta = (kPi / static_cast<double>(lugCount)) * 0.46;
-	double deltaRad = std::asin((std::min)(0.999, chordB / (2.0 * rOut)));
-	deltaRad = (std::min)(deltaRad, maxDelta);
-	deltaRad = (std::max)(
-		deltaRad,
-		(std::min)(11.0 * kPi / 180.0, maxDelta * 0.58));
-	deltaRad = (std::min)(deltaRad, maxDelta);
-	const double deltaDeg = deltaRad * (180.0 / kPi);
-
-	const long want = static_cast<long>(lugCount) * 2;
-	if (want < 4 || want > 48)
-		return;
-
-	std::vector<double> target(static_cast<size_t>(want));
-	for (int k = 0; k < lugCount; ++k)
+	long want = 0;
+	std::vector<double> target;
+	double rLo = 0.0;
+	double rHi = 0.0;
+	bool targetsFromSector2 = false;
+	if (lugCount == 2 && hubOuterR > rBore + 0.2)
 	{
-		const double c = static_cast<double>(k) * (360.0 / static_cast<double>(lugCount));
-		target[static_cast<size_t>(k) * 2] = c - deltaDeg;
-		target[static_cast<size_t>(k) * 2 + 1] = c + deltaDeg;
+		const double rInnerFace = (std::max)(rBore + 0.45, (std::min)(hubOuterR, R - 0.55));
+		double Bmm = (std::max)(faceSlotB, faceSlotB1 * 0.55);
+		Bmm = (std::max)(0.8, (std::min)(Bmm, rInnerFace * 0.72));
+		if (Bmm < rInnerFace - 0.12 && Bmm < R - 0.12)
+		{
+			const double ri2 = rInnerFace * rInnerFace - Bmm * Bmm;
+			const double ro2 = R * R - Bmm * Bmm;
+			if (ri2 > 0.0 && ro2 > 0.0)
+			{
+				const double sri = std::sqrt(ri2);
+				const double sro = std::sqrt(ro2);
+				const double ym = 0.5 * (sri + sro);
+				const double xm = ym;
+				const double angV = std::atan2(ym, Bmm) * (180.0 / kPi);
+				const double angH = std::atan2(Bmm, xm) * (180.0 / kPi);
+				target.push_back(angV);
+				target.push_back(angH);
+				target.push_back(angV + 180.0);
+				target.push_back(angH + 180.0);
+				want = 4;
+				rLo = (std::max)(rBore + 0.05, rInnerFace - 1.6);
+				rHi = R + 2.5;
+				targetsFromSector2 = true;
+			}
+		}
 	}
+
+	if (!targetsFromSector2)
+	{
+		const double chordB = (std::max)(faceSlotB, faceSlotB1 * 0.52);
+		double depthUse = (std::max)(1.2, toothRadialDepth);
+		depthUse = (std::min)(depthUse, (R - r) * 0.85);
+		depthUse = (std::min)(depthUse, R * 0.22);
+		const double rOut = (std::min)(R + depthUse, D * 0.52);
+		double rIn = (std::max)(r + 0.55, R - depthUse);
+		rIn = (std::min)(rIn, rOut - 0.35);
+		rIn = (std::max)(rIn, r + 0.35);
+		if (rOut <= rIn + 0.12)
+			return;
+
+		const double maxDelta = (kPi / static_cast<double>(lugCount)) * 0.46;
+		double deltaRad = std::asin((std::min)(0.999, chordB / (2.0 * rOut)));
+		deltaRad = (std::min)(deltaRad, maxDelta);
+		deltaRad = (std::max)(
+			deltaRad,
+			(std::min)(11.0 * kPi / 180.0, maxDelta * 0.58));
+		deltaRad = (std::min)(deltaRad, maxDelta);
+		const double deltaDeg = deltaRad * (180.0 / kPi);
+
+		want = static_cast<long>(lugCount) * 2;
+		if (want < 4 || want > 48)
+			return;
+
+		target.resize(static_cast<size_t>(want));
+		for (int k = 0; k < lugCount; ++k)
+		{
+			const double c = static_cast<double>(k) * (360.0 / static_cast<double>(lugCount));
+			target[static_cast<size_t>(k) * 2] = c - deltaDeg;
+			target[static_cast<size_t>(k) * 2 + 1] = c + deltaDeg;
+		}
+
+		rLo = (std::max)(rBore + 0.1, rIn - 0.95);
+		rHi = (std::min)(rOut + 1.8, R + (rOut - R) + 2.0);
+	}
+
+	if (want < 4 || static_cast<size_t>(want) != target.size())
+		return;
 
 	const double rApply = (std::min)(
 		filletRmm,
@@ -1150,8 +1195,6 @@ void AddHalfCouplingJawFlankFillets(
 		return out;
 	};
 
-	const double rLo = (std::max)(rBore + 0.1, rIn - 0.95);
-	const double rHi = (std::min)(rOut + 1.8, R + (rOut - R) + 2.0);
 	const double zLo = toothH * 0.08;
 	const double zHi = toothH * 0.94;
 
@@ -1436,8 +1479,6 @@ bool BuildHalfCouplingPart(
 
 		AddThroughAllAxisBoreCut(pPart, r);
 
-		AddHalfCouplingShoulderChamferCut(pPart, R, rHub, L_jaw, h.shoulderRadiusR);
-
 		const double keyHalfW = h.keywayWidthB * 0.5;
 		const double t1 = (std::max)(0.1, h.keywayDt1 - d);
 		const double keyDepth = (std::min)(
@@ -1469,6 +1510,7 @@ bool BuildHalfCouplingPart(
 
 		const int nLug = (std::max)(2, lugCount);
 		const double toothDepth = (std::min)(8.5, (std::max)(2.8, spiderLegWidth * 0.62));
+		double lugToothHeight = 0.0;
 		AddRadialLugs(
 			pPart,
 			D,
@@ -1481,12 +1523,36 @@ bool BuildHalfCouplingPart(
 			h.lengthL3,
 			spiderLegWidth,
 			rHub,
-			nullptr,
+			&lugToothHeight,
 			err);
 
 		(void)gostSeriesTorqueNm;
 
-		AddHalfCouplingHubEndAndJawFaceChamferCuts(pPart, R, r, rHub, L_jaw, L1, h.gostTableId);
+		try
+		{
+			pDoc->RebuildDocument();
+		}
+		catch (const _com_error&)
+		{
+		}
+
+		const double jawFilletR =
+			(h.filletR > 0.05) ? h.filletR : (std::min)(1.2, (std::max)(0.45, h.faceSlotB * 0.14));
+		AddHalfCouplingJawFlankFillets(
+			pPart,
+			pDoc,
+			lugToothHeight,
+			r,
+			R,
+			D,
+			d,
+			nLug,
+			h.faceSlotB,
+			h.faceSlotB1,
+			toothDepth,
+			rHub,
+			jawFilletR,
+			err);
 
 		try
 		{
