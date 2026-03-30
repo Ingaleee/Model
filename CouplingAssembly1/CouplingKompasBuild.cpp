@@ -1441,22 +1441,20 @@ bool BuildHalfCouplingPart(
 		const double keyDepth = (std::min)(
 			(std::max)(t1, 0.15),
 			(std::max)(0.6, (d1 - d) * 0.62));
-		double zKey0 = L_jaw + L_hub_seg * 0.16;
-		double zKey1 = L1 - L_hub_seg * 0.12;
+		const double hubZ0 = L_jaw;
+		const double hubZ1 = L1;
+		const double mHub = (std::max)(0.3, (std::min)(L_hub_seg * 0.12, 4.0));
+		double zKey0 = hubZ0 + mHub;
+		double zKey1 = hubZ1 - mHub;
 		if (h.lengthL2 > 0.5)
-			zKey0 = L_jaw + (std::min)(h.lengthL2 * 0.22, L_hub_seg * 0.45);
+			zKey0 = hubZ0 + (std::min)(h.lengthL2 * 0.35, L_hub_seg * 0.55);
 		if (h.lengthL3 > 0.5)
-			zKey1 = L1 - (std::min)(h.lengthL3 * 0.32, L_hub_seg * 0.5);
-		if (zKey1 <= zKey0 + 2.0)
-			zKey1 = L1 - L_hub_seg * 0.1;
-		if (zKey1 <= zKey0 + 2.0)
-			zKey0 = L_jaw + L_hub_seg * 0.12;
-		zKey0 = (std::max)(zKey0, L_jaw + 0.2);
-		zKey1 = (std::min)(zKey1, L1 - 0.2);
-		if (zKey1 <= zKey0 + 1.8)
-			zKey1 = L1 - 0.15;
-		const int nLug = (std::max)(2, lugCount);
-		const double keywayPlaneYawDeg = (nLug == 2) ? 45.0 : 0.0;
+			zKey1 = hubZ1 - (std::min)(h.lengthL3 * 0.35, L_hub_seg * 0.55);
+		if (zKey1 <= zKey0 + 1.5)
+		{
+			zKey0 = hubZ0 + 0.35;
+			zKey1 = hubZ1 - 0.35;
+		}
 		AddKeywayOnHub(
 			pPart,
 			rHub,
@@ -1465,24 +1463,11 @@ bool BuildHalfCouplingPart(
 			keyHalfW,
 			keyDepth + 0.5,
 			h.filletR,
-			keywayPlaneYawDeg);
-		const double toothDepth = (std::min)(8.5, (std::max)(2.8, spiderLegWidth * 0.62));
-		AddRadialLugs(
-			pPart,
-			D,
-			d,
-			L_jaw,
-			nLug,
-			toothDepth,
-			h.faceSlotB,
-			h.faceSlotB1,
-			h.lengthL3,
-			spiderLegWidth,
-			rHub,
-			nullptr,
-			err);
+			0.0);
 
 		(void)gostSeriesTorqueNm;
+		(void)lugCount;
+		(void)spiderLegWidth;
 
 		try
 		{
