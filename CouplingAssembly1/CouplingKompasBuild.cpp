@@ -89,6 +89,22 @@ static bool SpiderEdgeAtSpiderValleyBisectorDeg(double angDeg, int nRays)
 	return false;
 }
 
+static bool SpiderEdgeAtLobeTipBisectorDeg(double angDeg, int nRays)
+{
+	for (int k = 0; k < nRays; ++k)
+	{
+		const double tk = -90.0 + static_cast<double>(k) * (360.0 / static_cast<double>(nRays));
+		double d = angDeg - tk;
+		while (d > 180.0)
+			d -= 360.0;
+		while (d < -180.0)
+			d += 360.0;
+		if (std::fabs(d) < 4.0)
+			return true;
+	}
+	return false;
+}
+
 static double SpiderAbsDiffDeg(double aDeg, double bDeg)
 {
 	const double d = std::fmod(aDeg - bDeg + 540.0, 360.0) - 180.0;
@@ -347,6 +363,321 @@ void AddSpiderInnerCylinderFlankFillets(
 	}
 }
 
+void AddSpiderOuterBossFlankFillets(
+	ksPartPtr pPart,
+	ksDocument3DPtr pDoc,
+	ksEntityPtr pBoss,
+	double Ri,
+	double Ro,
+	double thicknessH,
+	double legWidthB,
+	double filletRmm,
+	int nRays,
+	const double* targetAnglesDeg,
+	int nTargetAngles,
+	CString* err)
+{
+	if (pPart == nullptr || pDoc == nullptr || pBoss == nullptr || nRays < 3)
+		return;
+	if (thicknessH < 0.25 || Ro <= Ri + 0.08 || filletRmm < 0.04)
+		return;
+
+	const double rFlankMin = Ri + (std::max)(0.1, legWidthB * 0.12);
+	const double rFlankMax = Ro - (std::max)(0.06, legWidthB * 0.04);
+	if (rFlankMax <= rFlankMin + 0.15)
+		return;
+
+	const double rApply = (std::min)(
+		filletRmm,
+		(std::max)(
+			0.06,
+			(std::min)(legWidthB * 0.14, (Ro - Ri) * 0.24)));
+	if (rApply < 0.035)
+		return;
+
+	try
+	{
+		pDoc->RebuildDocument();
+	}
+	catch (const _com_error&)
+	{
+	}
+
+	const double tolR = (std::max)(0.55, (Ro - Ri) * 0.09);
+	const double zSpanMin = thicknessH * 0.82;
+	const long want = static_cast<long>(nRays) * 2;
+	const bool useAngles =
+		targetAnglesDeg != nullptr && nTargetAngles == static_cast<int>(want) && want > 0;
+
+	struct SpiderOuterEdgeCand
+	{
+		ksEntityPtr ed;
+		double angDeg;
+	};
+
+	auto collectOuterFlankEdges = [&](double xyTol, double zMinF, double rTolF, bool bisectorSkip) {
+		std::vector<SpiderOuterEdgeCand> out;
+		ksEntityCollectionPtr edges = pPart->EntityCollection(o3d_edge);
+		for (long i = 0; i < edges->GetCount(); ++i)
+		{
+			ksEntityPtr ed = edges->GetByIndex(i);
+			ksEdgeDefinitionPtr edef = ed->GetDefinition();
+			if (edef == nullptr)
+				continue;
+			ksEntityPtr owner = edef->GetOwnerEntity();
+			if (owner != nullptr && owner != pBoss)
+				continue;
+			if (edef->IsCircle() != VARIANT_FALSE)
+				continue;
+
+			ksVertexDefinitionPtr v1 = edef->GetVertex(true);
+			ksVertexDefinitionPtr v2 = edef->GetVertex(false);
+			if (v1 == nullptr || v2 == nullptr)
+				continue;
+			double x1, y1, z1, x2, y2, z2;
+			v1->GetPoint(&x1, &y1, &z1);
+			v2->GetPoint(&x2, &y2, &z2);
+			const double dxy = std::hypot(x2 - x1, y2 - y1);
+			if (dxy > xyTol)
+				continue;
+			const double dz = std::fabs(z2 - z1);
+			if (dz < zSpanMin * zMinF)
+				continue;
+			const double r1 = std::hypot(x1, y1);
+			const double r2 = std::hypot(x2, y2);
+			if (r1 < rFlankMin - tolR * rTolF || r1 > rFlankMax + tolR * rTolF ||
+				r2 < rFlankMin - tolR * rTolF || r2 > rFlankMax + tolR * rTolF)
+				continue;
+			const double angDeg = std::atan2(0.5 * (y1 + y2), 0.5 * (x1 + x2)) * (180.0 / kPi);
+			if (bisectorSkip && SpiderEdgeAtLobeTipBisectorDeg(angDeg, nRays))
+				continue;
+			out.push_back({ed, angDeg});
+		}
+		return out;
+	};
+
+	auto pickByTargets = [&](const std::vector<SpiderOuterEdgeCand>& cands, double angTol1, double angTol2) {
+		std::vector<ksEntityPtr> r;
+		if (!useAngles || cands.empty() || want <= 0)
+			return r;
+		std::vector<char> used(cands.size(), 0);
+		std::vector<ksEntityPtr> bySlot(static_cast<size_t>(want), nullptr);
+		for (int pass = 0; pass < 2; ++pass)
+		{
+			const double angTol = (pass == 0) ? angTol1 : angTol2;
+			for (long j = 0; j < want; ++j)
+			{
+				if (bySlot[static_cast<size_t>(j)] != nullptr)
+					continue;
+				double bestD = 1e300;
+				size_t bestI = cands.size();
+				for (size_t i = 0; i < cands.size(); ++i)
+				{
+					if (used[i])
+						continue;
+					const double d = SpiderAbsDiffDeg(cands[i].angDeg, targetAnglesDeg[j]);
+					if (d < bestD)
+					{
+						bestD = d;
+						bestI = i;
+					}
+				}
+				if (bestI < cands.size() && bestD <= angTol)
+				{
+					used[bestI] = 1;
+					bySlot[static_cast<size_t>(j)] = cands[bestI].ed;
+				}
+			}
+		}
+		for (long j = 0; j < want; ++j)
+		{
+			if (bySlot[static_cast<size_t>(j)] != nullptr)
+				r.push_back(bySlot[static_cast<size_t>(j)]);
+		}
+		return r;
+	};
+
+	try
+	{
+		std::vector<ksEntityPtr> picked;
+		if (useAngles)
+		{
+			picked = pickByTargets(collectOuterFlankEdges(0.14, 0.7, 1.4, false), 11.0, 22.0);
+			if (static_cast<long>(picked.size()) < want)
+				picked = pickByTargets(collectOuterFlankEdges(0.24, 0.64, 1.9, false), 14.0, 28.0);
+			if (static_cast<long>(picked.size()) < want)
+				picked.clear();
+		}
+		if (picked.empty() && useAngles)
+		{
+			picked = pickByTargets(collectOuterFlankEdges(0.05, 1.0, 1.05, true), 18.0, 34.0);
+			if (static_cast<long>(picked.size()) < want)
+				picked = pickByTargets(collectOuterFlankEdges(0.3, 0.6, 2.0, false), 24.0, 48.0);
+		}
+		if (static_cast<long>(picked.size()) < want && useAngles)
+		{
+			auto wide = collectOuterFlankEdges(0.5, 0.46, 3.5, false);
+			if (static_cast<long>(wide.size()) >= want)
+			{
+				std::sort(
+					wide.begin(),
+					wide.end(),
+					[](const SpiderOuterEdgeCand& a, const SpiderOuterEdgeCand& b) {
+						return a.angDeg < b.angDeg;
+					});
+				picked.clear();
+				for (long j = 0; j < want; ++j)
+				{
+					const size_t idx =
+						(static_cast<size_t>(j) * wide.size()) / static_cast<size_t>(want);
+					picked.push_back(wide[idx].ed);
+				}
+			}
+		}
+		if (picked.empty())
+			return;
+
+		auto tryFilletAll = [&](double rad) -> bool {
+			ksEntityPtr pF = pPart->NewEntity(o3d_fillet);
+			ksFilletDefinitionPtr fd = pF->GetDefinition();
+			fd->radius = rad;
+			ksEntityCollectionPtr ar = fd->array();
+			ar->Clear();
+			for (const ksEntityPtr& ed : picked)
+				ar->Add(ed);
+			pF->Create();
+			return true;
+		};
+
+		bool filletOk = false;
+		double rTry = rApply;
+		for (int attempt = 0; attempt < 7 && !filletOk; ++attempt)
+		{
+			try
+			{
+				filletOk = tryFilletAll(rTry);
+			}
+			catch (const _com_error&)
+			{
+				filletOk = false;
+				rTry *= 0.55;
+				if (rTry < 0.02)
+					break;
+			}
+		}
+		if (!filletOk && err != nullptr)
+			*err += L"\nКОМПАС: внешние скругления лапок звезды не применены.";
+	}
+	catch (const _com_error& e)
+	{
+		AppendComError(err, e);
+	}
+}
+
+void AddSpiderBoreRimChamfers(
+	ksPartPtr pPart,
+	ksDocument3DPtr pDoc,
+	ksEntityPtr pBoreCut,
+	double boreR,
+	double thicknessH,
+	double chamferMm,
+	CString* err)
+{
+	if (pPart == nullptr || pDoc == nullptr || pBoreCut == nullptr || boreR < 0.2 || thicknessH < 0.2)
+		return;
+	double c = (std::min)(chamferMm, boreR * 0.32);
+	c = (std::min)(c, thicknessH * 0.2);
+	c = (std::max)(c, 0.12);
+	if (c < 0.1 || c > boreR * 0.45)
+		return;
+
+	try
+	{
+		pDoc->RebuildDocument();
+	}
+	catch (const _com_error&)
+	{
+	}
+
+	const double tolR = (std::max)(0.4, boreR * 0.035);
+	const double tolZ = (std::max)(0.1, thicknessH * 0.035);
+	std::vector<ksEntityPtr> rims;
+	ksEntityCollectionPtr edges = pPart->EntityCollection(o3d_edge);
+	for (long i = 0; i < edges->GetCount(); ++i)
+	{
+		ksEntityPtr ed = edges->GetByIndex(i);
+		ksEdgeDefinitionPtr edef = ed->GetDefinition();
+		if (edef == nullptr)
+			continue;
+		if (edef->GetOwnerEntity() != pBoreCut)
+			continue;
+		if (edef->IsCircle() == VARIANT_FALSE)
+			continue;
+		ksVertexDefinitionPtr v1 = edef->GetVertex(true);
+		ksVertexDefinitionPtr v2 = edef->GetVertex(false);
+		if (v1 == nullptr || v2 == nullptr)
+			continue;
+		double x1, y1, z1, x2, y2, z2;
+		v1->GetPoint(&x1, &y1, &z1);
+		v2->GetPoint(&x2, &y2, &z2);
+		if (std::fabs(z1 - z2) > 0.02)
+			continue;
+		const double z = 0.5 * (z1 + z2);
+		if (std::fabs(z) > tolZ && std::fabs(z - thicknessH) > tolZ)
+			continue;
+		const double r = std::hypot(x1, y1);
+		if (std::fabs(r - boreR) > tolR)
+			continue;
+		rims.push_back(ed);
+	}
+	if (rims.empty())
+	{
+		for (long i = 0; i < edges->GetCount(); ++i)
+		{
+			ksEntityPtr ed = edges->GetByIndex(i);
+			ksEdgeDefinitionPtr edef = ed->GetDefinition();
+			if (edef == nullptr || edef->IsCircle() == VARIANT_FALSE)
+				continue;
+			ksVertexDefinitionPtr v1 = edef->GetVertex(true);
+			ksVertexDefinitionPtr v2 = edef->GetVertex(false);
+			if (v1 == nullptr || v2 == nullptr)
+				continue;
+			double x1, y1, z1, x2, y2, z2;
+			v1->GetPoint(&x1, &y1, &z1);
+			v2->GetPoint(&x2, &y2, &z2);
+			if (std::fabs(z1 - z2) > 0.02)
+				continue;
+			const double z = 0.5 * (z1 + z2);
+			if (std::fabs(z) > tolZ && std::fabs(z - thicknessH) > tolZ)
+				continue;
+			const double r = std::hypot(x1, y1);
+			if (std::fabs(r - boreR) > tolR)
+				continue;
+			rims.push_back(ed);
+		}
+	}
+	if (rims.empty())
+		return;
+
+	try
+	{
+		ksEntityPtr pCh = pPart->NewEntity(o3d_chamfer);
+		ksChamferDefinitionPtr cd = pCh->GetDefinition();
+		cd->SetChamferParam(VARIANT_TRUE, c, c);
+		ksEntityCollectionPtr ar = cd->array();
+		ar->Clear();
+		for (const ksEntityPtr& e : rims)
+			ar->Add(e);
+		pCh->Create();
+	}
+	catch (const _com_error& e)
+	{
+		if (err != nullptr)
+			*err += L"\nКОМПАС: фаска кромки отверстия звезды не выполнена.";
+		AppendComError(err, e);
+	}
+}
+
 ksPartPtr PartFromCollection(ksPartCollectionPtr coll, int idxZeroBased)
 {
 	if (coll == nullptr)
@@ -597,7 +928,11 @@ void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, doub
 			const double valleyDeg = -90.0 + (static_cast<double>(k) + 0.5) * stepDeg;
 			const double aInnerIR = std::atan2(yIR[k], xIR[k]) * (180.0 / kPi);
 			const double aInnerIL1 = std::atan2(yIL[kp1], xIL[kp1]) * (180.0 / kPi);
-			const int innerDir = DegOnCCWArc(aInnerIR, aInnerIL1, valleyDeg) ? 1 : -1;
+			const bool ccwHasV = DegOnCCWArc(aInnerIR, aInnerIL1, valleyDeg);
+			const bool cwHasV = DegOnCCWArc(aInnerIL1, aInnerIR, valleyDeg);
+			int innerDir = 1;
+			if (ccwHasV != cwHasV)
+				innerDir = ccwHasV ? 1 : -1;
 
 			p2DDoc->ksLineSeg(xIL[k], yIL[k], xOL[k], yOL[k], 1);
 			p2DDoc->ksArcByAngle(0.0, 0.0, Ro, aOut1, aOut2, 1, 1);
@@ -648,8 +983,14 @@ void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, doub
 	}
 }
 
-static void AddSpiderCylindricalBoreCut(ksPartPtr pPart, double boreR, double bossHeightMm)
+static void AddSpiderCylindricalBoreCut(
+	ksPartPtr pPart,
+	double boreR,
+	double bossHeightMm,
+	ksEntityPtr* outCutOp = nullptr)
 {
+	if (outCutOp != nullptr)
+		*outCutOp = nullptr;
 	if (pPart == nullptr || boreR < 0.2)
 		return;
 	const double depth = (bossHeightMm > 0.25) ? (bossHeightMm + 4.0) : 40.0;
@@ -661,7 +1002,6 @@ static void AddSpiderCylindricalBoreCut(ksPartPtr pPart, double boreR, double bo
 		pSk->Create();
 		ksDocument2DPtr p2 = pSkDef->BeginEdit();
 		p2->ksCircle(0.0, 0.0, boreR, 1);
-		KsAxisLineXThroughOriginStyle3(p2);
 		pSkDef->EndEdit();
 
 		ksEntityPtr pCut = pPart->NewEntity(o3d_cutExtrusion);
@@ -670,6 +1010,8 @@ static void AddSpiderCylindricalBoreCut(ksPartPtr pPart, double boreR, double bo
 		pCutDef->directionType = dtNormal;
 		pCutDef->SetSideParam(TRUE, etBlind, depth, 0, FALSE);
 		pCut->Create();
+		if (outCutOp != nullptr)
+			*outCutOp = pCut;
 	}
 	catch (const _com_error&)
 	{
@@ -740,7 +1082,8 @@ bool BuildSpiderPart(
 		pBossDef->SetSideParam(TRUE, etBlind, H, 0, FALSE);
 		pBoss->Create();
 
-		AddSpiderCylindricalBoreCut(pPart, Ri, H);
+		ksEntityPtr pBoreCut{};
+		AddSpiderCylindricalBoreCut(pPart, Ri, H, &pBoreCut);
 
 		try
 		{
@@ -765,6 +1108,34 @@ bool BuildSpiderPart(
 				flankAngDeg,
 				2 * n,
 				err);
+
+			double xIL[8]{}, yIL[8]{}, xOL[8]{}, yOL[8]{}, xOR[8]{}, yOR[8]{}, xIR[8]{}, yIR[8]{};
+			double omx[8]{}, omy[8]{};
+			SpiderProfile2D::Fill46RayInnerOuterPoints(
+				n, Ro, Ri, s.legWidth, xIL, yIL, xOL, yOL, xOR, yOR, xIR, yIR, omx, omy);
+			double outerAngDeg[16]{};
+			for (int k = 0; k < n; ++k)
+			{
+				outerAngDeg[2 * k] = std::atan2(yOL[k], xOL[k]) * (180.0 / kPi);
+				outerAngDeg[2 * k + 1] = std::atan2(yOR[k], xOR[k]) * (180.0 / kPi);
+			}
+			AddSpiderOuterBossFlankFillets(
+				pPart,
+				pDoc,
+				pBoss,
+				Ri,
+				Ro,
+				H,
+				s.legWidth,
+				s.filletRadius,
+				n,
+				outerAngDeg,
+				2 * n,
+				err);
+
+			const double chamferBore =
+				(std::min)((std::max)(0.25, H * 0.065), Ri * 0.2);
+			AddSpiderBoreRimChamfers(pPart, pDoc, pBoreCut, Ri, H, chamferBore, err);
 		}
 
 		try
