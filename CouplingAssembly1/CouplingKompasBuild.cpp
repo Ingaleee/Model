@@ -20,6 +20,14 @@ namespace
 {
 constexpr double kPi = 3.14159265358979323846;
 
+inline bool KompasSourceFileExists(LPCWSTR path)
+{
+	if (path == nullptr || path[0] == 0)
+		return false;
+	const DWORD a = GetFileAttributesW(path);
+	return a != INVALID_FILE_ATTRIBUTES && (a & FILE_ATTRIBUTE_DIRECTORY) == 0;
+}
+
 inline void KsAxisLineXThroughOriginStyle3(ksDocument2DPtr p2DDoc)
 {
 	if (p2DDoc == nullptr)
@@ -103,14 +111,17 @@ void AddSpiderInnerCylinderFlankFillets(
 	const double tolR = (std::max)(0.5, riProfile * 0.05);
 	const double zSpanMin = thicknessH * 0.82;
 	const long want = static_cast<long>(nRays) * 2;
+	const bool useAngles =
+		targetAnglesDeg != nullptr && nTargetAngles == static_cast<int>(want) && want > 0;
+
+	struct SpiderInnerEdgeCand
+	{
+		ksEntityPtr ed;
+		double angDeg;
+	};
 
 	auto collectVerticalInnerBossEdges = [&](double xyTol, double zMinF, double rTolF, bool bisectorSkip) {
-		struct Item
-		{
-			ksEntityPtr ed;
-			double angDeg;
-		};
-		std::vector<Item> out;
+		std::vector<SpiderInnerEdgeCand> out;
 		ksEntityCollectionPtr edges = pPart->EntityCollection(o3d_edge);
 		for (long i = 0; i < edges->GetCount(); ++i)
 		{
@@ -150,67 +161,63 @@ void AddSpiderInnerCylinderFlankFillets(
 		return out;
 	};
 
+	auto pickByTargets = [&](const std::vector<SpiderInnerEdgeCand>& cands, double angTol1, double angTol2) {
+		std::vector<ksEntityPtr> r;
+		if (!useAngles || cands.empty() || want <= 0)
+			return r;
+		std::vector<char> used(cands.size(), 0);
+		std::vector<ksEntityPtr> bySlot(static_cast<size_t>(want), nullptr);
+		for (int pass = 0; pass < 2; ++pass)
+		{
+			const double angTol = (pass == 0) ? angTol1 : angTol2;
+			for (long j = 0; j < want; ++j)
+			{
+				if (bySlot[static_cast<size_t>(j)] != nullptr)
+					continue;
+				double bestD = 1e300;
+				size_t bestI = cands.size();
+				for (size_t i = 0; i < cands.size(); ++i)
+				{
+					if (used[i])
+						continue;
+					const double d = SpiderAbsDiffDeg(cands[i].angDeg, targetAnglesDeg[j]);
+					if (d < bestD)
+					{
+						bestD = d;
+						bestI = i;
+					}
+				}
+				if (bestI < cands.size() && bestD <= angTol)
+				{
+					used[bestI] = 1;
+					bySlot[static_cast<size_t>(j)] = cands[bestI].ed;
+				}
+			}
+		}
+		for (long j = 0; j < want; ++j)
+		{
+			if (bySlot[static_cast<size_t>(j)] != nullptr)
+				r.push_back(bySlot[static_cast<size_t>(j)]);
+		}
+		return r;
+	};
+
 	try
 	{
 		std::vector<ksEntityPtr> picked;
-		const bool useAngles =
-			targetAnglesDeg != nullptr && nTargetAngles == static_cast<int>(want) && want > 0;
 
 		if (useAngles)
 		{
-			auto tryPick = [&](double xyTol, double zMinF, double rTolF, double angTol1, double angTol2) {
-				std::vector<char> used;
-				std::vector<ksEntityPtr> bySlot(static_cast<size_t>(want), nullptr);
-				auto cands = collectVerticalInnerBossEdges(xyTol, zMinF, rTolF, false);
-				used.assign(cands.size(), 0);
-				for (int pass = 0; pass < 2; ++pass)
-				{
-					const double angTol = (pass == 0) ? angTol1 : angTol2;
-					for (long j = 0; j < want; ++j)
-					{
-						if (bySlot[static_cast<size_t>(j)] != nullptr)
-							continue;
-						double bestD = 1e300;
-						size_t bestI = cands.size();
-						for (size_t i = 0; i < cands.size(); ++i)
-						{
-							if (used[i])
-								continue;
-							const double d = SpiderAbsDiffDeg(cands[i].angDeg, targetAnglesDeg[j]);
-							if (d < bestD)
-							{
-								bestD = d;
-								bestI = i;
-							}
-						}
-						if (bestI < cands.size() && bestD <= angTol)
-						{
-							used[bestI] = 1;
-							bySlot[static_cast<size_t>(j)] = cands[bestI].ed;
-						}
-					}
-				}
-				std::vector<ksEntityPtr> r;
-				for (long j = 0; j < want; ++j)
-				{
-					if (bySlot[static_cast<size_t>(j)] != nullptr)
-						r.push_back(bySlot[static_cast<size_t>(j)]);
-				}
-				return r;
-			};
-
-			picked = tryPick(0.12, 0.72, 1.35, 11.0, 22.0);
+			picked = pickByTargets(collectVerticalInnerBossEdges(0.12, 0.72, 1.35, false), 11.0, 22.0);
 			if (static_cast<long>(picked.size()) < want)
-				picked = tryPick(0.22, 0.65, 1.85, 14.0, 28.0);
+				picked = pickByTargets(collectVerticalInnerBossEdges(0.22, 0.65, 1.85, false), 14.0, 28.0);
 			if (static_cast<long>(picked.size()) < want)
 				picked.clear();
 		}
 
-		if (picked.empty())
+		if (picked.empty() && useAngles)
 		{
-			auto cLegacy = collectVerticalInnerBossEdges(0.04, 1.0, 1.0, true);
-			for (const auto& it : cLegacy)
-				picked.push_back(it.ed);
+			picked = pickByTargets(collectVerticalInnerBossEdges(0.04, 1.0, 1.0, true), 18.0, 34.0);
 			if (static_cast<long>(picked.size()) < want)
 			{
 				try
@@ -220,10 +227,33 @@ void AddSpiderInnerCylinderFlankFillets(
 				catch (const _com_error&)
 				{
 				}
-				cLegacy = collectVerticalInnerBossEdges(0.2, 0.75, 1.35, true);
+				picked = pickByTargets(collectVerticalInnerBossEdges(0.2, 0.75, 1.35, true), 22.0, 42.0);
+			}
+		}
+
+		if (static_cast<long>(picked.size()) < want && useAngles)
+			picked = pickByTargets(collectVerticalInnerBossEdges(0.28, 0.62, 2.1, false), 26.0, 52.0);
+		if (static_cast<long>(picked.size()) < want && useAngles)
+			picked = pickByTargets(collectVerticalInnerBossEdges(0.45, 0.48, 3.2, false), 38.0, 88.0);
+
+		if (static_cast<long>(picked.size()) < want && useAngles)
+		{
+			auto wide = collectVerticalInnerBossEdges(0.55, 0.45, 4.0, false);
+			if (static_cast<long>(wide.size()) >= want)
+			{
+				std::sort(
+					wide.begin(),
+					wide.end(),
+					[](const SpiderInnerEdgeCand& a, const SpiderInnerEdgeCand& b) {
+						return a.angDeg < b.angDeg;
+					});
 				picked.clear();
-				for (const auto& it : cLegacy)
-					picked.push_back(it.ed);
+				for (long j = 0; j < want; ++j)
+				{
+					const size_t idx =
+						(static_cast<size_t>(j) * wide.size()) / static_cast<size_t>(want);
+					picked.push_back(wide[idx].ed);
+				}
 			}
 		}
 
@@ -234,14 +264,64 @@ void AddSpiderInnerCylinderFlankFillets(
 			return;
 		}
 
-		ksEntityPtr pF = pPart->NewEntity(o3d_fillet);
-		ksFilletDefinitionPtr fd = pF->GetDefinition();
-		fd->radius = rApply;
-		ksEntityCollectionPtr ar = fd->array();
-		ar->Clear();
-		for (const ksEntityPtr& ed : picked)
-			ar->Add(ed);
-		pF->Create();
+		auto tryFilletAll = [&](double r) -> bool {
+			ksEntityPtr pF = pPart->NewEntity(o3d_fillet);
+			ksFilletDefinitionPtr fd = pF->GetDefinition();
+			fd->radius = r;
+			ksEntityCollectionPtr ar = fd->array();
+			ar->Clear();
+			for (const ksEntityPtr& ed : picked)
+				ar->Add(ed);
+			pF->Create();
+			return true;
+		};
+
+		bool filletOk = false;
+		double rTry = rApply;
+		for (int attempt = 0; attempt < 8 && !filletOk; ++attempt)
+		{
+			try
+			{
+				filletOk = tryFilletAll(rTry);
+			}
+			catch (const _com_error&)
+			{
+				filletOk = false;
+				rTry *= 0.5;
+				if (rTry < 0.02)
+					break;
+			}
+		}
+
+		if (!filletOk)
+		{
+			const double rOne = (std::max)(0.03, (std::min)(rApply * 0.4, riProfile * 0.18));
+			int okOne = 0;
+			for (const ksEntityPtr& ed : picked)
+			{
+				try
+				{
+					ksEntityPtr pF = pPart->NewEntity(o3d_fillet);
+					ksFilletDefinitionPtr fd = pF->GetDefinition();
+					fd->radius = rOne;
+					ksEntityCollectionPtr ar = fd->array();
+					ar->Clear();
+					ar->Add(ed);
+					pF->Create();
+					++okOne;
+				}
+				catch (const _com_error&)
+				{
+				}
+			}
+			if (err != nullptr)
+			{
+				if (okOne == 0)
+					*err += L"\nКОМПАС: скругление по ГОСТ на звезде не выполнено (уменьшите радиус fillet или проверьте модель).";
+				else if (okOne < static_cast<int>(picked.size()))
+					*err += L"\nКОМПАС: скругление звезды выполнено не на всех рёбрах.";
+			}
+		}
 	}
 	catch (const _com_error& e)
 	{
@@ -1089,9 +1169,98 @@ bool TryBuildAssemblyDocument(
 		{
 		}
 
-		pAsmDoc->SetPartFromFile(static_cast<LPCWSTR>(pathSpider), nullptr, VARIANT_TRUE);
-		pAsmDoc->SetPartFromFile(static_cast<LPCWSTR>(pathHalf1), nullptr, VARIANT_TRUE);
-		pAsmDoc->SetPartFromFile(static_cast<LPCWSTR>(pathHalf2), nullptr, VARIANT_TRUE);
+		if (!KompasSourceFileExists(pathSpider) || !KompasSourceFileExists(pathHalf1) ||
+			!KompasSourceFileExists(pathHalf2))
+		{
+			if (err != nullptr)
+				*err +=
+					L"\nСборка: на диске нет одного из файлов Звёздочка.m3d / Полумуфта1.m3d / Полумуфта2.m3d "
+					L"(папка временных файлов или путь с кириллицей — сохраните детали вручную и проверьте доступ).";
+		}
+
+		auto insertPartFromFile = [&](LPCWSTR path, VARIANT_BOOL keepExternalLink) {
+			if (!KompasSourceFileExists(path))
+				return;
+			try
+			{
+				pAsmDoc->SetPartFromFile(path, nullptr, keepExternalLink);
+			}
+			catch (const _com_error&)
+			{
+			}
+		};
+
+		auto insertAllParts = [&](VARIANT_BOOL keepExternalLink) {
+			insertPartFromFile(static_cast<LPCWSTR>(pathSpider), keepExternalLink);
+			insertPartFromFile(static_cast<LPCWSTR>(pathHalf1), keepExternalLink);
+			insertPartFromFile(static_cast<LPCWSTR>(pathHalf2), keepExternalLink);
+		};
+
+		auto rebuildAsm = [&]() {
+			try
+			{
+				pAsmDoc->RebuildDocument();
+			}
+			catch (const _com_error&)
+			{
+			}
+		};
+
+		auto partCountBest = [&]() -> long {
+			long n = 0;
+			ksPartCollectionPtr c = pAsmDoc->PartCollection(VARIANT_TRUE);
+			if (c != nullptr)
+			{
+				try
+				{
+					n = c->GetCount();
+				}
+				catch (const _com_error&)
+				{
+					n = 0;
+				}
+			}
+			if (n >= 3)
+				return n;
+			c = pAsmDoc->PartCollection(VARIANT_FALSE);
+			if (c != nullptr)
+			{
+				try
+				{
+					const long n2 = c->GetCount();
+					return (std::max)(n, n2);
+				}
+				catch (const _com_error&)
+				{
+					return n;
+				}
+			}
+			return n;
+		};
+
+		insertAllParts(VARIANT_TRUE);
+		rebuildAsm();
+
+		if (partCountBest() < 3)
+		{
+			pAsmDoc = app->Document3D();
+			created = pAsmDoc->Create(VARIANT_FALSE, VARIANT_FALSE);
+			if (created == VARIANT_FALSE)
+				created = pAsmDoc->Create(VARIANT_FALSE, VARIANT_TRUE);
+			if (created != VARIANT_FALSE)
+			{
+				try
+				{
+					pAsmDoc->Putcomment(
+						_bstr_t(L"Муфта зубчато-звёздочная, ГОСТ 14084-76 — сборка"));
+				}
+				catch (const _com_error&)
+				{
+				}
+				insertAllParts(VARIANT_FALSE);
+				rebuildAsm();
+			}
+		}
 
 		try
 		{
@@ -1100,11 +1269,39 @@ bool TryBuildAssemblyDocument(
 			const double gAsm = 1.0;
 			const double zStarLow = -0.5 * Hsp;
 
-			ksPartCollectionPtr coll = pAsmDoc->PartCollection(VARIANT_TRUE);
-			if (coll != nullptr && coll->GetCount() < 3 && err != nullptr)
+			ksPartCollectionPtr collT = pAsmDoc->PartCollection(VARIANT_TRUE);
+			ksPartCollectionPtr collF = pAsmDoc->PartCollection(VARIANT_FALSE);
+			long nT = 0;
+			long nF = 0;
+			if (collT != nullptr)
+			{
+				try
+				{
+					nT = collT->GetCount();
+				}
+				catch (const _com_error&)
+				{
+					collT = nullptr;
+				}
+			}
+			if (collF != nullptr)
+			{
+				try
+				{
+					nF = collF->GetCount();
+				}
+				catch (const _com_error&)
+				{
+					collF = nullptr;
+				}
+			}
+			ksPartCollectionPtr coll = (nF > nT) ? collF : collT;
+			const long collCount = (nF > nT) ? nF : nT;
+
+			if (coll != nullptr && collCount < 3 && err != nullptr)
 				*err += L"\nВ сборку вставлено меньше трёх деталей — имена и расстановка пропущены.";
 
-			if (coll != nullptr && coll->GetCount() >= 3)
+			if (coll != nullptr && collCount >= 3)
 			{
 				for (int k = 0; k < 3; ++k)
 				{

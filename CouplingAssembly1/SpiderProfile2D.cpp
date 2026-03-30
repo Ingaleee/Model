@@ -138,7 +138,9 @@ void Fill46RayInnerOuterPoints(
 		const double halfB = legWidthB * 0.5;
 		const double sa = (std::min)(0.999, halfB / Ro);
 		const double deltaRad =
-			(std::min)(std::asin(sa), sectorHalfRad * 0.88);
+			(n == 4)
+				? (std::min)(std::asin(sa), sectorHalfRad)
+				: (std::min)(std::asin(sa), sectorHalfRad * 0.88);
 		xOL[k] = Ro * std::cos(mid - deltaRad);
 		yOL[k] = Ro * std::sin(mid - deltaRad);
 		xOR[k] = Ro * std::cos(mid + deltaRad);
