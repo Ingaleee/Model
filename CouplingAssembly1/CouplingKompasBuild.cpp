@@ -59,7 +59,7 @@ static bool SpiderEdgeAtSpiderValleyBisectorDeg(double angDeg, int nRays)
 	for (int k = 0; k < nRays; ++k)
 	{
 		const double vk =
-			-90.0 + (static_cast<double>(k) + 0.5) * (360.0 / static_cast<double>(nRays));
+			90.0 + (static_cast<double>(k) + 0.5) * (360.0 / static_cast<double>(nRays));
 		double d = angDeg - vk;
 		while (d > 180.0)
 			d -= 360.0;
@@ -513,14 +513,13 @@ void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, doub
 			}
 			else
 			{
-				const double bisectorDeg = -90.0 + (static_cast<double>(k) + 0.5) * stepDeg;
+				const double bisectorDeg = 90.0 + (static_cast<double>(k) + 0.5) * stepDeg;
 				const double bisRad = bisectorDeg * toRad;
 				const double xValleyMid = riInner * std::cos(bisRad);
 				const double yValleyMid = riInner * std::sin(bisRad);
 				p2DDoc->ksArcBy3Points(xIR[k], yIR[k], xValleyMid, yValleyMid, xIL[kp1], yIL[kp1], 1);
 			}
 		}
-		p2DDoc->ksCircle(0.0, 0.0, Ri, 1);
 		(void)filletR;
 		return;
 	}
@@ -560,7 +559,34 @@ void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, doub
 		point_1[1][1] = yI;
 		p2DDoc->ksLineSeg(point_1[0][0], point_1[0][1], point_1[1][0], point_1[1][1], 1);
 	}
-	p2DDoc->ksCircle(0.0, 0.0, riDraw, 1);
+}
+
+static void AddSpiderCylindricalBoreCut(ksPartPtr pPart, double boreR, double bossHeightMm)
+{
+	if (pPart == nullptr || boreR < 0.2)
+		return;
+	const double depth = (bossHeightMm > 0.25) ? (bossHeightMm + 4.0) : 40.0;
+	try
+	{
+		ksEntityPtr pSk = pPart->NewEntity(o3d_sketch);
+		ksSketchDefinitionPtr pSkDef = pSk->GetDefinition();
+		pSkDef->SetPlane(pPart->GetDefaultEntity(o3d_planeXOY));
+		pSk->Create();
+		ksDocument2DPtr p2 = pSkDef->BeginEdit();
+		p2->ksCircle(0.0, 0.0, boreR, 1);
+		KsAxisLineXThroughOriginStyle3(p2);
+		pSkDef->EndEdit();
+
+		ksEntityPtr pCut = pPart->NewEntity(o3d_cutExtrusion);
+		ksCutExtrusionDefinitionPtr pCutDef = pCut->GetDefinition();
+		pCutDef->SetSketch(pSk);
+		pCutDef->directionType = dtNormal;
+		pCutDef->SetSideParam(TRUE, etBlind, depth, 0, FALSE);
+		pCut->Create();
+	}
+	catch (const _com_error&)
+	{
+	}
 }
 
 bool SaveActiveDoc(ksDocument3DPtr pDoc, const wchar_t* path, CString* err)
@@ -627,6 +653,8 @@ bool BuildSpiderPart(
 		pBossDef->directionType = dtNormal;
 		pBossDef->SetSideParam(TRUE, etBlind, H, 0, FALSE);
 		pBoss->Create();
+
+		AddSpiderCylindricalBoreCut(pPart, Ri, H);
 
 		try
 		{

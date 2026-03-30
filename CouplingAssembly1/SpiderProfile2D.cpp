@@ -68,14 +68,17 @@ bool ParallelFlankInnerHit(
 	double* ix,
 	double* iy)
 {
-	const double b = 2.0 * (ox * dx + oy * dy);
-	const double c = ox * ox + oy * oy - Ri * Ri;
-	const double disc = b * b - 4.0 * c;
+	const double a = dx * dx + dy * dy;
+	if (a < 1e-20)
+		return false;
+	const double bLin = 2.0 * (ox * dx + oy * dy);
+	const double c0 = ox * ox + oy * oy - Ri * Ri;
+	const double disc = bLin * bLin - 4.0 * a * c0;
 	if (disc < 0.0)
 		return false;
 	const double sd = std::sqrt(disc);
-	const double s1 = (-b - sd) * 0.5;
-	const double s2 = (-b + sd) * 0.5;
+	const double s1 = (-bLin - sd) / (2.0 * a);
+	const double s2 = (-bLin + sd) / (2.0 * a);
 	const double Ro0 = std::hypot(ox, oy);
 	double bestS = s1;
 	double bestE = 1e300;
@@ -131,7 +134,7 @@ void Fill46RayInnerOuterPoints(
 	const double riInner = Ri;
 	for (int k = 0; k < n; ++k)
 	{
-		const double midDeg = -90.0 + static_cast<double>(k) * stepDeg;
+		const double midDeg = 90.0 + static_cast<double>(k) * stepDeg;
 		const double mid = midDeg * toRad;
 		const double tx = -std::sin(mid);
 		const double ty = std::cos(mid);
@@ -148,10 +151,10 @@ void Fill46RayInnerOuterPoints(
 		omx[k] = Ro * std::cos(mid);
 		omy[k] = Ro * std::sin(mid);
 
-		const double inDeg = -90.0 + (static_cast<double>(k) + 0.5) * stepDeg;
+		const double inDeg = 90.0 + (static_cast<double>(k) + 0.5) * stepDeg;
 		const double prevInDeg =
-			(k == 0) ? (-90.0 + (static_cast<double>(n) - 0.5) * stepDeg)
-					 : (-90.0 + (static_cast<double>(k) - 0.5) * stepDeg);
+			(k == 0) ? (90.0 + (static_cast<double>(n) - 0.5) * stepDeg)
+					 : (90.0 + (static_cast<double>(k) - 0.5) * stepDeg);
 		const double xV0 = riInner * std::cos(prevInDeg * toRad);
 		const double yV0 = riInner * std::sin(prevInDeg * toRad);
 		const double xV1 = riInner * std::cos(inDeg * toRad);
@@ -217,7 +220,7 @@ void AppendClosedContourMm(
 			pts.push_back({xIL[kp1], yIL[kp1]});
 		else
 		{
-			const double bisectorDeg = -90.0 + (static_cast<double>(k) + 0.5) * stepDeg;
+			const double bisectorDeg = 90.0 + (static_cast<double>(k) + 0.5) * stepDeg;
 			const double bisRad = bisectorDeg * toRad;
 			const double xVm = Ri * std::cos(bisRad);
 			const double yVm = Ri * std::sin(bisRad);
