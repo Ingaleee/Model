@@ -59,7 +59,7 @@ static bool SpiderEdgeAtSpiderValleyBisectorDeg(double angDeg, int nRays)
 	for (int k = 0; k < nRays; ++k)
 	{
 		const double vk =
-			90.0 + (static_cast<double>(k) + 0.5) * (360.0 / static_cast<double>(nRays));
+			-90.0 + (static_cast<double>(k) + 0.5) * (360.0 / static_cast<double>(nRays));
 		double d = angDeg - vk;
 		while (d > 180.0)
 			d -= 360.0;
@@ -489,13 +489,8 @@ void AddHalfCouplingHubEndAndJawFaceChamferCuts(
 
 void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, double filletR, double legWidthB)
 {
-	const double toRad = kPi / 180.0;
-
 	if (n == 4 || n == 6)
 	{
-		const double riInner = Ri;
-		const double stepDeg = 360.0 / static_cast<double>(n);
-
 		double xIL[8]{}, yIL[8]{}, xOL[8]{}, yOL[8]{}, xOR[8]{}, yOR[8]{}, xIR[8]{}, yIR[8]{};
 		double omx[8]{}, omy[8]{};
 		SpiderProfile2D::Fill46RayInnerOuterPoints(n, Ro, Ri, legWidthB, xIL, yIL, xOL, yOL, xOR, yOR, xIR, yIR, omx, omy);
@@ -507,23 +502,13 @@ void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, doub
 			p2DDoc->ksLineSeg(xIL[k], yIL[k], xOL[k], yOL[k], 1);
 			p2DDoc->ksArcBy3Points(xOL[k], yOL[k], omx[k], omy[k], xOR[k], yOR[k], 1);
 			p2DDoc->ksLineSeg(xOR[k], yOR[k], xIR[k], yIR[k], 1);
-			if (n == 4)
-			{
-				p2DDoc->ksLineSeg(xIR[k], yIR[k], xIL[kp1], yIL[kp1], 1);
-			}
-			else
-			{
-				const double bisectorDeg = 90.0 + (static_cast<double>(k) + 0.5) * stepDeg;
-				const double bisRad = bisectorDeg * toRad;
-				const double xValleyMid = riInner * std::cos(bisRad);
-				const double yValleyMid = riInner * std::sin(bisRad);
-				p2DDoc->ksArcBy3Points(xIR[k], yIR[k], xValleyMid, yValleyMid, xIL[kp1], yIL[kp1], 1);
-			}
+			p2DDoc->ksLineSeg(xIR[k], yIR[k], xIL[kp1], yIL[kp1], 1);
 		}
 		(void)filletR;
 		return;
 	}
 
+	const double toRad = kPi / 180.0;
 	const double riDraw = SpiderInnerValleyRadiusMm(Ro, Ri, filletR);
 	double capHalfDeg = (180.0 / kPi) * std::asin((std::min)(0.995, legWidthB / (2.0 * Ro)));
 	capHalfDeg = (std::max)(6.0, (std::min)(capHalfDeg, 180.0 / n - 1.0));

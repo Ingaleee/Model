@@ -134,16 +134,13 @@ void Fill46RayInnerOuterPoints(
 	const double riInner = Ri;
 	for (int k = 0; k < n; ++k)
 	{
-		const double midDeg = 90.0 + static_cast<double>(k) * stepDeg;
+		const double midDeg = -90.0 + static_cast<double>(k) * stepDeg;
 		const double mid = midDeg * toRad;
 		const double tx = -std::sin(mid);
 		const double ty = std::cos(mid);
 		const double halfB = legWidthB * 0.5;
 		const double sa = (std::min)(0.999, halfB / Ro);
-		const double deltaRad =
-			(n == 4)
-				? (std::min)(std::asin(sa), sectorHalfRad)
-				: (std::min)(std::asin(sa), sectorHalfRad * 0.88);
+		const double deltaRad = (std::min)(std::asin(sa), sectorHalfRad);
 		xOL[k] = Ro * std::cos(mid - deltaRad);
 		yOL[k] = Ro * std::sin(mid - deltaRad);
 		xOR[k] = Ro * std::cos(mid + deltaRad);
@@ -151,10 +148,10 @@ void Fill46RayInnerOuterPoints(
 		omx[k] = Ro * std::cos(mid);
 		omy[k] = Ro * std::sin(mid);
 
-		const double inDeg = 90.0 + (static_cast<double>(k) + 0.5) * stepDeg;
+		const double inDeg = -90.0 + (static_cast<double>(k) + 0.5) * stepDeg;
 		const double prevInDeg =
-			(k == 0) ? (90.0 + (static_cast<double>(n) - 0.5) * stepDeg)
-					 : (90.0 + (static_cast<double>(k) - 0.5) * stepDeg);
+			(k == 0) ? (-90.0 + (static_cast<double>(n) - 0.5) * stepDeg)
+					 : (-90.0 + (static_cast<double>(k) - 0.5) * stepDeg);
 		const double xV0 = riInner * std::cos(prevInDeg * toRad);
 		const double yV0 = riInner * std::sin(prevInDeg * toRad);
 		const double xV1 = riInner * std::cos(inDeg * toRad);
@@ -201,12 +198,10 @@ void AppendClosedContourMm(
 	pts.clear();
 	if (n != 4 && n != 6)
 		return;
-	const double toRad = kPi / 180.0;
 	const int nSeg = (std::max)(3, arcSegPerCap);
 	double xIL[8]{}, yIL[8]{}, xOL[8]{}, yOL[8]{}, xOR[8]{}, yOR[8]{}, xIR[8]{}, yIR[8]{};
 	double omx[8]{}, omy[8]{};
 	Fill46RayInnerOuterPoints(n, Ro, Ri, legWidthB, xIL, yIL, xOL, yOL, xOR, yOR, xIR, yIR, omx, omy);
-	const double stepDeg = 360.0 / static_cast<double>(n);
 
 	pts.push_back({xIL[0], yIL[0]});
 	for (int k = 0; k < n; ++k)
@@ -216,17 +211,7 @@ void AppendClosedContourMm(
 		AppendArc3Interior(pts, xOL[k], yOL[k], omx[k], omy[k], xOR[k], yOR[k], nSeg);
 		pts.push_back({xOR[k], yOR[k]});
 		pts.push_back({xIR[k], yIR[k]});
-		if (n == 4)
-			pts.push_back({xIL[kp1], yIL[kp1]});
-		else
-		{
-			const double bisectorDeg = 90.0 + (static_cast<double>(k) + 0.5) * stepDeg;
-			const double bisRad = bisectorDeg * toRad;
-			const double xVm = Ri * std::cos(bisRad);
-			const double yVm = Ri * std::sin(bisRad);
-			AppendArc3Interior(pts, xIR[k], yIR[k], xVm, yVm, xIL[kp1], yIL[kp1], nSeg);
-			pts.push_back({xIL[kp1], yIL[kp1]});
-		}
+		pts.push_back({xIL[kp1], yIL[kp1]});
 	}
 	if (pts.size() > 2)
 	{
