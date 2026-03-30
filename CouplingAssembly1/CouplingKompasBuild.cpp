@@ -28,6 +28,36 @@ inline bool KompasSourceFileExists(LPCWSTR path)
 	return a != INVALID_FILE_ATTRIBUTES && (a & FILE_ATTRIBUTE_DIRECTORY) == 0;
 }
 
+static void DedupeClosedPolyline(std::vector<std::pair<double, double>>& p, double eps)
+{
+	std::vector<std::pair<double, double>> q;
+	q.reserve(p.size());
+	for (const auto& v : p)
+	{
+		if (q.empty() ||
+			std::hypot(v.first - q.back().first, v.second - q.back().second) > eps)
+			q.push_back(v);
+	}
+	p.swap(q);
+	if (p.size() >= 2 &&
+		std::hypot(p.front().first - p.back().first, p.front().second - p.back().second) < eps)
+		p.pop_back();
+}
+
+static void EnsureCCWPositiveAreaXY(std::vector<std::pair<double, double>>& p)
+{
+	if (p.size() < 3)
+		return;
+	double a = 0.0;
+	for (size_t i = 0; i < p.size(); ++i)
+	{
+		const size_t j = (i + 1) % p.size();
+		a += p[i].first * p[j].second - p[j].first * p[i].second;
+	}
+	if (a < 0.0)
+		std::reverse(p.begin(), p.end());
+}
+
 inline void KsAxisLineXThroughOriginStyle3(ksDocument2DPtr p2DDoc)
 {
 	if (p2DDoc == nullptr)
@@ -900,6 +930,13 @@ void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, doub
 			(void)filletR;
 			return;
 		}
+		DedupeClosedPolyline(pv, 1e-8);
+		EnsureCCWPositiveAreaXY(pv);
+		if (pv.size() < 3)
+		{
+			(void)filletR;
+			return;
+		}
 		const size_t m = pv.size();
 		for (size_t i = 0; i < m; ++i)
 		{
@@ -965,6 +1002,13 @@ static void AddSpiderCylindricalBoreCut(
 		ksSketchDefinitionPtr pSkDef = pSk->GetDefinition();
 		pSkDef->SetPlane(pPart->GetDefaultEntity(o3d_planeXOY));
 		pSk->Create();
+		try
+		{
+			pSk->Putname(_bstr_t(L"Отверстие d"));
+		}
+		catch (const _com_error&)
+		{
+		}
 		ksDocument2DPtr p2 = pSkDef->BeginEdit();
 		p2->ksCircle(0.0, 0.0, boreR, 1);
 		pSkDef->EndEdit();
@@ -1007,7 +1051,7 @@ bool BuildSpiderPart(
 {
 	try
 	{
-		const int n = (std::max)(3, s.rays);
+		const int n = (s.rays == 4 || s.rays == 6) ? s.rays : 6;
 		const double Ro = s.outerDiameter * 0.5;
 		double Ri = s.innerDiameter * 0.5;
 		if (Ri >= Ro - 0.05)
@@ -1035,10 +1079,27 @@ bool BuildSpiderPart(
 		ksSketchDefinitionPtr pSketchDef = pSketch->GetDefinition();
 		pSketchDef->SetPlane(pPart->GetDefaultEntity(o3d_planeXOY));
 		pSketch->Create();
+		try
+		{
+			pSketch->Putname(_bstr_t(L"Звезда — контур"));
+		}
+		catch (const _com_error&)
+		{
+		}
 
 		ksDocument2DPtr p2DDoc = pSketchDef->BeginEdit();
 		DrawSpiderProfile(p2DDoc, n, Ro, Ri, rf, s.legWidth);
 		pSketchDef->EndEdit();
+
+		if (err != nullptr && s.rays != 4 && s.rays != 6)
+		{
+			CString note;
+			note.Format(
+				L"\nЗвёздочка: в модели использовано %d лучей (ГОСТ — 4 или 6; в параметрах документа было %d).",
+				n,
+				s.rays);
+			*err += note;
+		}
 
 		ksEntityPtr pBoss = pPart->NewEntity(o3d_bossExtrusion);
 		ksBossExtrusionDefinitionPtr pBossDef = pBoss->GetDefinition();
