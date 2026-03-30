@@ -19,7 +19,11 @@ bool CCouplingBuilder::Build(const CCouplingAssembly1Doc& doc) const
 			msg += L"\n\n";
 			msg += kompasErr;
 		}
-		AfxMessageBox(msg, MB_OK | MB_ICONINFORMATION);
+		UINT ic = MB_ICONINFORMATION;
+		if (kompasErr.Find(L"не создан") >= 0 || kompasErr.Find(L"не выполнено") >= 0 ||
+			kompasErr.Find(L"SetSketch") >= 0 || kompasErr.Find(L"исключение COM") >= 0)
+			ic = MB_ICONWARNING;
+		AfxMessageBox(msg, MB_OK | ic);
 		return true;
 	}
 
@@ -30,5 +34,5 @@ bool CCouplingBuilder::Build(const CCouplingAssembly1Doc& doc) const
 			L"КОМПАС-3D: не удалось подключиться или построить модель.",
 			MB_OK | MB_ICONWARNING);
 
-	return true;
+	return false;
 }

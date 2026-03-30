@@ -887,14 +887,23 @@ void AddHalfCouplingHubEndAndJawFaceChamferCuts(
 		TryMeridianRevolveCutTriangle(pPart, R, 0.0, R - cJaw, 0.0, R, cJaw);
 }
 
-void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, double filletR, double legWidthB)
+bool DrawSpiderProfile(
+	ksDocument2DPtr p2DDoc,
+	int n,
+	double Ro,
+	double Ri,
+	double filletR,
+	double legWidthB,
+	CString* err)
 {
 	if (n == 4 || n == 6)
 	{
 		if (p2DDoc == nullptr)
 		{
 			(void)filletR;
-			return;
+			if (err != nullptr)
+				*err += L"\nКОМПАС: 2D-документ эскиза звезды недоступен.";
+			return false;
 		}
 		double xIL[8]{}, yIL[8]{}, xOL[8]{}, yOL[8]{}, xOR[8]{}, yOR[8]{}, xIR[8]{}, yIR[8]{};
 		double omx[8]{}, omy[8]{};
@@ -912,18 +921,75 @@ void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, doub
 				const double vx = Ri * std::cos(vr);
 				const double vy = Ri * std::sin(vr);
 
-				p2DDoc->ksLineSeg(xIL[k], yIL[k], xOL[k], yOL[k], style);
-				p2DDoc->ksArcBy3Points(xOL[k], yOL[k], omx[k], omy[k], xOR[k], yOR[k], style);
-				p2DDoc->ksLineSeg(xOR[k], yOR[k], xIR[k], yIR[k], style);
-				p2DDoc->ksArcBy3Points(xIR[k], yIR[k], vx, vy, xIL[kp1], yIL[kp1], style);
+				if (p2DDoc->ksLineSeg(xIL[k], yIL[k], xOL[k], yOL[k], style) == 0)
+				{
+					if (err != nullptr)
+					{
+						CString m;
+						m.Format(
+							L"\nКОМПАС: ksLineSeg (лапка→наружу), сектор %d — объект не создан.",
+							k);
+						*err += m;
+					}
+					return false;
+				}
+				if (p2DDoc->ksArcBy3Points(xOL[k], yOL[k], omx[k], omy[k], xOR[k], yOR[k], style) == 0)
+				{
+					if (err != nullptr)
+					{
+						CString m;
+						m.Format(L"\nКОМПАС: ksArcBy3Points (наружная дуга), сектор %d — объект не создан.", k);
+						*err += m;
+					}
+					return false;
+				}
+				if (p2DDoc->ksLineSeg(xOR[k], yOR[k], xIR[k], yIR[k], style) == 0)
+				{
+					if (err != nullptr)
+					{
+						CString m;
+						m.Format(
+							L"\nКОМПАС: ksLineSeg (наружу→внутрь), сектор %d — объект не создан.",
+							k);
+						*err += m;
+					}
+					return false;
+				}
+				if (p2DDoc->ksArcBy3Points(xIR[k], yIR[k], vx, vy, xIL[kp1], yIL[kp1], style) == 0)
+				{
+					if (p2DDoc->ksLineSeg(xIR[k], yIR[k], xIL[kp1], yIL[kp1], style) == 0)
+					{
+						if (err != nullptr)
+						{
+							CString m;
+							m.Format(
+								L"\nКОМПАС: внутренняя дуга/хорда впадины, сектор %d — объект не создан.",
+								k);
+							*err += m;
+						}
+						return false;
+					}
+					if (err != nullptr)
+					{
+						CString m;
+						m.Format(
+							L"\nКОМПАС: ksArcBy3Points (внутренняя дуга), сектор %d — заменена отрезком "
+							L"(хорда впадины).",
+							k);
+						*err += m;
+					}
+				}
 			}
 		}
 		catch (const _com_error&)
 		{
+			if (err != nullptr)
+				*err += L"\nКОМПАС: исключение COM при построении контура звезды.";
+			return false;
 		}
 
 		(void)filletR;
-		return;
+		return true;
 	}
 
 	const double toRad = kPi / 180.0;
@@ -962,6 +1028,7 @@ void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, doub
 		point_1[1][1] = yI;
 		p2DDoc->ksLineSeg(point_1[0][0], point_1[0][1], point_1[1][0], point_1[1][1], 1);
 	}
+	return true;
 }
 
 static void AddSpiderCylindricalBoreCut(
@@ -1067,8 +1134,11 @@ bool BuildSpiderPart(
 		}
 
 		ksDocument2DPtr p2DDoc = pSketchDef->BeginEdit();
-		DrawSpiderProfile(p2DDoc, n, Ro, Ri, rf, s.legWidth);
+		const bool spiderSketchOk = DrawSpiderProfile(p2DDoc, n, Ro, Ri, rf, s.legWidth, err);
 		pSketchDef->EndEdit();
+		if (!spiderSketchOk && err != nullptr &&
+			err->Find(L"КОМПАС: ks") < 0 && err->Find(L"исключение COM при построении контура звезды") < 0)
+			*err += L"\nКОМПАС: контур звезды в эскизе построен не полностью.";
 
 		if (err != nullptr && s.rays != 4 && s.rays != 6)
 		{
@@ -2221,6 +2291,7 @@ bool CouplingBuildInKompas(const CCouplingAssembly1Doc& doc, CString* err)
 	const CStringW pSpider = dir + L"Звёздочка.m3d";
 	const CStringW pHalf1 = dir + L"Полумуфта1.m3d";
 	const CStringW pHalf2 = dir + L"Полумуфта2.m3d";
+	const CStringW pAsm = dir + L"Муфта_Сборка.a3d";
 
 	const HalfCouplingParams& h1 = doc.GetHalfCoupling1Params();
 	const HalfCouplingParams& h2 = doc.GetHalfCoupling2Params();
@@ -2240,11 +2311,15 @@ bool CouplingBuildInKompas(const CCouplingAssembly1Doc& doc, CString* err)
 
 	if (err != nullptr)
 	{
-		if (err->IsEmpty())
-			err->Format(
-				L"Папка: %s\nЗвёздочка (откройте именно этот файл): %s",
-				static_cast<LPCWSTR>(dir),
-				static_cast<LPCWSTR>(pSpider));
+		CStringW tail;
+		tail.Format(
+			L"\n\n— Вывод в КОМПАС —\nПапка: %s\nЗвёздочка: %s\nПолумуфта1: %s\nПолумуфта2: %s\nСборка: %s",
+			static_cast<LPCWSTR>(dir),
+			static_cast<LPCWSTR>(pSpider),
+			static_cast<LPCWSTR>(pHalf1),
+			static_cast<LPCWSTR>(pHalf2),
+			static_cast<LPCWSTR>(pAsm));
+		*err += tail;
 	}
 
 	return true;
