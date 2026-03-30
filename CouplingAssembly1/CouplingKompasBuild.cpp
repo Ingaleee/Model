@@ -337,64 +337,6 @@ void AddHalfCouplingHubEndAndJawFaceChamferCuts(
 		TryMeridianRevolveCutTriangle(pPart, R, 0.0, R - cJaw, 0.0, R, cJaw);
 }
 
-static bool SpiderTryOuterCornerFillet(
-	double px,
-	double py,
-	double sx,
-	double sy,
-	double ex,
-	double ey,
-	double r,
-	double* oT1x,
-	double* oT1y,
-	double* oT2x,
-	double* oT2y,
-	double* oMx,
-	double* oMy)
-{
-	if (r < 0.025)
-		return false;
-	const double d1x = sx - px;
-	const double d1y = sy - py;
-	const double d2x = ex - sx;
-	const double d2y = ey - sy;
-	const double l1 = std::hypot(d1x, d1y);
-	const double l2 = std::hypot(d2x, d2y);
-	if (l1 < 1e-4 || l2 < 1e-4)
-		return false;
-	const double u1x = d1x / l1;
-	const double u1y = d1y / l1;
-	const double u2x = d2x / l2;
-	const double u2y = d2y / l2;
-	const double cphi = u1x * u2x + u1y * u2y;
-	const double phi = std::acos((std::max)(-1.0, (std::min)(1.0, cphi)));
-	if (phi < 1e-3 || phi > kPi - 1e-3)
-		return false;
-	double t = r / std::tan(phi * 0.5);
-	t = (std::min)(t, l1 * 0.42);
-	t = (std::min)(t, l2 * 0.42);
-	*oT1x = sx - u1x * t;
-	*oT1y = sy - u1y * t;
-	*oT2x = sx + u2x * t;
-	*oT2y = sy + u2y * t;
-	double bx = -u1x + u2x;
-	double by = -u1y + u2y;
-	const double bl = std::hypot(bx, by);
-	if (bl < 1e-8)
-		return false;
-	bx /= bl;
-	by /= bl;
-	if (bx * sx + by * sy > 0.0)
-	{
-		bx = -bx;
-		by = -by;
-	}
-	const double dist = r / std::sin(phi * 0.5);
-	*oMx = sx + bx * dist;
-	*oMy = sy + by * dist;
-	return true;
-}
-
 static bool ParallelFlankInnerHit(
 	double ox,
 	double oy,
@@ -443,6 +385,15 @@ static bool ParallelFlankInnerHit(
 	return true;
 }
 
+static double SpiderNormAngle0_2pi(double a)
+{
+	const double tw = 2.0 * kPi;
+	a = std::fmod(a, tw);
+	if (a < 0.0)
+		a += tw;
+	return a;
+}
+
 static void SpiderMidOnCircleArc(
 	double R,
 	double x0,
@@ -452,53 +403,49 @@ static void SpiderMidOnCircleArc(
 	double* mx,
 	double* my)
 {
-	const double t0 = std::atan2(y0, x0);
-	const double t1 = std::atan2(y1, x1);
+	const double t0 = SpiderNormAngle0_2pi(std::atan2(y0, x0));
+	const double t1 = SpiderNormAngle0_2pi(std::atan2(y1, x1));
 	double d = t1 - t0;
-	while (d > kPi)
+	if (d > kPi)
 		d -= 2.0 * kPi;
-	while (d < -kPi)
+	if (d < -kPi)
 		d += 2.0 * kPi;
-	const double tm = t0 + 0.5 * d;
+	const double tm = SpiderNormAngle0_2pi(t0 + 0.5 * d);
 	*mx = R * std::cos(tm);
 	*my = R * std::sin(tm);
 }
 
 void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, double filletR, double legWidthB)
 {
-	const double riDraw = SpiderInnerValleyRadiusMm(Ro, Ri, filletR);
-	double capHalfDeg = (180.0 / kPi) * std::asin((std::min)(0.995, legWidthB / (2.0 * Ro)));
-	capHalfDeg = (std::max)(6.0, (std::min)(capHalfDeg, 180.0 / n - 1.0));
-	const bool fourRayChord90 = (n == 4);
-	if (fourRayChord90)
-		capHalfDeg = 45.0;
-
 	const double toRad = kPi / 180.0;
-	const double rCornerMin = (std::min)(0.10, (std::max)(0.025, Ro * 0.0045));
-	const double rCorner = (std::max)(rCornerMin, (std::min)(filletR, Ro * 0.15));
 
-	if (n == 6)
+	if (n == 4 || n == 6)
 	{
 		const double riInner = Ri;
-		for (int k = 0; k < 6; ++k)
+		const double stepDeg = 360.0 / static_cast<double>(n);
+		const double sectorHalfRad = kPi / static_cast<double>(n);
+		for (int k = 0; k < n; ++k)
 		{
-			const double midDeg = -90.0 + k * 60.0;
+			const double midDeg = -90.0 + static_cast<double>(k) * stepDeg;
 			const double mid = midDeg * toRad;
 			const double tx = -std::sin(mid);
 			const double ty = std::cos(mid);
 			const double halfB = legWidthB * 0.5;
 			const double sa = (std::min)(0.999, halfB / Ro);
-			const double deltaRad = std::asin(sa);
-			const double mLdeg = midDeg - deltaRad * 180.0 / kPi;
-			const double mRdeg = midDeg + deltaRad * 180.0 / kPi;
+			const double deltaRad =
+				(std::min)(std::asin(sa), sectorHalfRad * 0.88);
+			const double deltaDeg = deltaRad * 180.0 / kPi;
+			const double mLdeg = midDeg - deltaDeg;
+			const double mRdeg = midDeg + deltaDeg;
 			const double xOL = Ro * std::cos(mid - deltaRad);
 			const double yOL = Ro * std::sin(mid - deltaRad);
 			const double xOR = Ro * std::cos(mid + deltaRad);
 			const double yOR = Ro * std::sin(mid + deltaRad);
 
-			const double inDeg = -90.0 + (k + 0.5) * 60.0;
+			const double inDeg = -90.0 + (static_cast<double>(k) + 0.5) * stepDeg;
 			const double prevInDeg =
-				(k == 0) ? (-90.0 + 5.5 * 60.0) : (-90.0 + (k - 0.5) * 60.0);
+				(k == 0) ? (-90.0 + (static_cast<double>(n) - 0.5) * stepDeg)
+						 : (-90.0 + (static_cast<double>(k) - 0.5) * stepDeg);
 			const double xV0 = riInner * std::cos(prevInDeg * toRad);
 			const double yV0 = riInner * std::sin(prevInDeg * toRad);
 			const double xV1 = riInner * std::cos(inDeg * toRad);
@@ -520,8 +467,13 @@ void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, doub
 			p2DDoc->ksLineSeg(xOR, yOR, xIR, yIR, 1);
 			p2DDoc->ksArcBy3Points(xIR, yIR, xm1, ym1, xV1, yV1, 1);
 		}
+		(void)filletR;
 		return;
 	}
+
+	const double riDraw = SpiderInnerValleyRadiusMm(Ro, Ri, filletR);
+	double capHalfDeg = (180.0 / kPi) * std::asin((std::min)(0.995, legWidthB / (2.0 * Ro)));
+	capHalfDeg = (std::max)(6.0, (std::min)(capHalfDeg, 180.0 / n - 1.0));
 
 	for (int k = 0; k < n; ++k)
 	{
@@ -541,77 +493,18 @@ void DrawSpiderProfile(ksDocument2DPtr p2DDoc, int n, double Ro, double Ri, doub
 		const double xI = riDraw * std::cos(inDeg * toRad);
 		const double yI = riDraw * std::sin(inDeg * toRad);
 
-		if (fourRayChord90)
-		{
-			double t1sx, t1sy, t2sx, t2sy, msx, msy;
-			double t3ex, t3ey, t4ex, t4ey, mex, mey;
-			const bool okS = SpiderTryOuterCornerFillet(
-				xP,
-				yP,
-				xS,
-				yS,
-				xE,
-				yE,
-				rCorner,
-				&t1sx,
-				&t1sy,
-				&t2sx,
-				&t2sy,
-				&msx,
-				&msy);
-			const bool okE = SpiderTryOuterCornerFillet(
-				xS,
-				yS,
-				xE,
-				yE,
-				xI,
-				yI,
-				rCorner,
-				&t3ex,
-				&t3ey,
-				&t4ex,
-				&t4ey,
-				&mex,
-				&mey);
-			if (okS)
-			{
-				p2DDoc->ksLineSeg(xP, yP, t1sx, t1sy, 1);
-				p2DDoc->ksArcBy3Points(t1sx, t1sy, msx, msy, t2sx, t2sy, 1);
-			}
-			else
-				p2DDoc->ksLineSeg(xP, yP, xS, yS, 1);
-			if (okE)
-			{
-				const double ax = okS ? t2sx : xS;
-				const double ay = okS ? t2sy : yS;
-				p2DDoc->ksLineSeg(ax, ay, t3ex, t3ey, 1);
-				p2DDoc->ksArcBy3Points(t3ex, t3ey, mex, mey, t4ex, t4ey, 1);
-				p2DDoc->ksLineSeg(t4ex, t4ey, xI, yI, 1);
-			}
-			else if (okS)
-				p2DDoc->ksLineSeg(t2sx, t2sy, xE, yE, 1);
-			else
-				p2DDoc->ksLineSeg(xS, yS, xE, yE, 1);
-			if (!okE && !okS)
-				p2DDoc->ksLineSeg(xE, yE, xI, yI, 1);
-			else if (!okE && okS)
-				p2DDoc->ksLineSeg(xE, yE, xI, yI, 1);
-		}
-		else
-		{
-			double point_1[2][2]{};
-			point_1[0][0] = xP;
-			point_1[0][1] = yP;
-			point_1[1][0] = xS;
-			point_1[1][1] = yS;
-			p2DDoc->ksLineSeg(point_1[0][0], point_1[0][1], point_1[1][0], point_1[1][1], 1);
-			p2DDoc->ksArcByAngle(0.0, 0.0, Ro, a1, a2, 1, 1);
-			point_1[0][0] = xE;
-			point_1[0][1] = yE;
-			point_1[1][0] = xI;
-			point_1[1][1] = yI;
-			p2DDoc->ksLineSeg(point_1[0][0], point_1[0][1], point_1[1][0], point_1[1][1], 1);
-		}
+		double point_1[2][2]{};
+		point_1[0][0] = xP;
+		point_1[0][1] = yP;
+		point_1[1][0] = xS;
+		point_1[1][1] = yS;
+		p2DDoc->ksLineSeg(point_1[0][0], point_1[0][1], point_1[1][0], point_1[1][1], 1);
+		p2DDoc->ksArcByAngle(0.0, 0.0, Ro, a1, a2, 1, 1);
+		point_1[0][0] = xE;
+		point_1[0][1] = yE;
+		point_1[1][0] = xI;
+		point_1[1][1] = yI;
+		p2DDoc->ksLineSeg(point_1[0][0], point_1[0][1], point_1[1][0], point_1[1][1], 1);
 	}
 }
 
@@ -647,7 +540,7 @@ bool BuildSpiderPart(
 		const double H = (s.thickness > 0.01) ? s.thickness : 1.0;
 		const double rf = (std::max)(0.0, (std::min)(s.filletRadius, Ri * 0.4));
 		const double riProfile =
-			(n == 6) ? Ri : SpiderInnerValleyRadiusMm(Ro, Ri, rf);
+			(n == 4 || n == 6) ? Ri : SpiderInnerValleyRadiusMm(Ro, Ri, rf);
 
 		ksDocument3DPtr pDoc = app->Document3D();
 		pDoc->Create(VARIANT_FALSE, VARIANT_TRUE);
